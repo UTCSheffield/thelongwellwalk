@@ -1,17 +1,22 @@
 import picamera
+import time
+
 
 with picamera.PiCamera() as camera:
 
 
   #Power up
-  camera.resolution = (800, 600)
-  camera.start_preview()
+  #camera.resolution = (800, 600)
+  #camera.start_preview()
+  time.sleep(2)
+  start = time.time()
+
   #calc name
-  camera.start_recording('foo.h264')
+  #camera.start_recording('foo.h264')
   
-  camera.capture('foo.jpg', use_video_port=True)
-  camera.wait_recording(10)
-  camera.stop_recording()
+  #camera.capture('foo.jpg', use_video_port=True)
+  #camera.wait_recording(10)
+  #camera.stop_recording()
 
   
   #Start video
