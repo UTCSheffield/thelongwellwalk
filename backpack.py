@@ -6,7 +6,7 @@ with picamera.PiCamera() as camera:
 
 
   #Power up
-  #camera.resolution = (800, 600)
+  #camera.resolution = (1920, 1080) #1080P Full HD 1920x1080
   #camera.start_preview()
   time.sleep(2)
   start = time.time()
@@ -14,7 +14,7 @@ with picamera.PiCamera() as camera:
   #calc name
   #camera.start_recording('foo.h264')
   
-  #camera.capture('foo.jpg', use_video_port=True)
+  #camera.capture('foo.jpg', use_video_port=Tru)e
   #camera.wait_recording(10)
   #camera.stop_recording()
 
@@ -24,6 +24,7 @@ with picamera.PiCamera() as camera:
   #Set the next time the video should change name
 
   #Loop
+  #while keyboard test.
     #camera.wait_recording(10)
   
     #Check the buttons
