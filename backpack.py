@@ -11,10 +11,12 @@ with picamera.PiCamera() as camera:
   time.sleep(2)
   start = time.time()
 
+  # ('img{timestamp:%Y-%m-%d-%H-%M}.jpg'):
+  
   #calc name
   #camera.start_recording('foo.h264')
   
-  #camera.capture('foo.jpg', use_video_port=Tru)e
+  #camera.capture('foo.jpg', use_video_port=True)
   #camera.wait_recording(10)
   #camera.stop_recording()
 
