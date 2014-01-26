@@ -55,7 +55,7 @@ with picamera.PiCamera() as camera:
     if (debug):
       print("still "+stillname)
     
-    camera.wait_recording(50)
+    camera.wait_recording(20)
     
     if (debug):
       print("video ending "+videoname)
@@ -65,6 +65,18 @@ with picamera.PiCamera() as camera:
     camera.split_recording(videoname)
     if (debug):
       print("video started "+videoname)
+
+    camera.wait_recording(30)
+    
+    if (debug):
+      print("video ending "+videoname)
+
+    now = time.gmtime()
+    videoname = videocachedir+getFileName(now,'h264')  
+    camera.split_recording(videoname)
+    if (debug):
+      print("video started "+videoname)
+
 
     
     
