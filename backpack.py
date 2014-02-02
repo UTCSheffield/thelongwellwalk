@@ -41,7 +41,7 @@ with picamera.PiCamera() as camera:
   
   #calc name
   videoname = videocachedir+getFileName(start,'h264')
-  camera.start_recording(videoname,  inline_headers=True)
+  camera.start_recording(videoname,  inline_headers=True, profile="constrained")
   if (debug):
     print("video started "+videoname)
 
@@ -55,7 +55,7 @@ with picamera.PiCamera() as camera:
     if (debug):
       print("still "+stillname)
     
-    camera.wait_recording(50)
+    camera.wait_recording(10)
     
     if (debug):
       print("video ending "+videoname)
