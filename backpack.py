@@ -5,12 +5,25 @@ import io
 import random
 import picamera
 from PIL import Image
+import RPi.GPIO as GPIO 
+
 
 prior_image = None
 tl_count = 0
 tl_target = 60
 startuppause = 5
 buffer_length = 15
+
+videobutton = 8
+statusbutton = 9
+
+statusLED = 10
+
+GPIO.setup(videobutton,  GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(statusbutton, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+GPIO.setup(statusLED, GPIO.OUT)
+
 
 outputbasedir =  os.path.expanduser('~/BPOA/') 
 videocachedir = outputbasedir+'videocache/'
@@ -29,8 +42,16 @@ def getFolderName(curtime, ext):
         os.makedirs(name)
     return name
 
-def check_button(camera):
-    result = random.randint(0, 20) == 0
+def output_status():
+    #not checking anything at the mo
+    GPIO.output( statusLED, True) 
+
+def check_buttons():
+    if (GPIO.input(statusbutton)):
+        output_status()
+    else:
+        GPIO.output( statusLED, False)
+    result = GPIO.input(videobutton)
     return result
 
 def dotimelapse():
@@ -88,7 +109,7 @@ with picamera.PiCamera() as camera:
         while True:
             camera.wait_recording(1)
             dotimelapse()
-            if check_button(camera):
+            if check_buttons():
                 print('Button Pressed!')
                 
                 now = time.gmtime()
@@ -101,7 +122,7 @@ with picamera.PiCamera() as camera:
                 write_video(stream)
                 # Wait until motion is no longer detected, then split
                 # recording back to the in-memory circular buffer
-                while check_button(camera):
+                while check_buttons():
                     camera.wait_recording(1)
                     dotimelapse()
                 print('Button unpressed')
