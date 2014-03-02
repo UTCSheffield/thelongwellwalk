@@ -49,16 +49,22 @@ def getFolderName(curtime, ext):
     return name
 
 # Change the output LEDs to show Liam what is going on
+# TODO : #31 LED Output Codes
 def output_status():
     global videorecording, sizelimitreached, tl_count
-    #not checking anything at the mo
-    # TODO : Add checking status and setting LED's
+    
     if sizelimitreached:
+        No Lights = Broken
+        # DONE : Red = Disk space Too low, video will not record
         GPIO.output( statusLED_R, True)
     else:    
+        # DONE : Green = OK
         GPIO.output( statusLED_G, True)
+        
         if videorecording:
+            # DONE : Green flashing yellow = Recording video (just my current hack as we have a broken blue line)
             GPIO.output( statusLED_R, (tl_count % 2)) #flashing green / yellow for recording
+    
     #GPIO.output( statusLED_R, videorecording)
     
     # blue wire is broken just at the moment 
