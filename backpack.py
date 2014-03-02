@@ -125,6 +125,7 @@ with picamera.PiCamera() as camera:
     
     
     GPIO.add_event_detect(videobutton, GPIO.RISING)  # Start listening out for button presses
+    GPIO.add_event_detect(audiobutton, GPIO.RISING)  # Start listening out for audio button presses
     
     # Have we run out of disk space
     stats = os.statvfs(outputbasedir)
@@ -149,6 +150,13 @@ with picamera.PiCamera() as camera:
                 videorecording = False
                 if (debug):
                     print ("limit breached video stopping")
+            
+            if GPIO.event_detected(audiobutton) and not sizelimitreached:
+                # TODO :34 Audio
+                # this is the audio blog button
+                if (debug):
+                    print('Audio Button Pressed!')
+                    
                         
             
             # Has the video button been pressed?
@@ -157,7 +165,7 @@ with picamera.PiCamera() as camera:
                     print('Video Button Pressed!')
                 
                 # If we are recording stop recording
-                if videorecording:                
+                if videorecording:
                     if (debug):
                         print('Button pressed to stop ')
                     # Go back to recording to the ring buffer not the file
@@ -175,6 +183,12 @@ with picamera.PiCamera() as camera:
                     
                     # Send video to the file
                     camera.split_recording(videoname)
+                    
+                    # TODO : #34 Audio Recording
+                    # TODO : the video triggers the wide angle audio
+                    # TODO : workout if we can have an audio ring buffer
+                    
+                    
                     # Save the ring buffer to the disk
                     write_video(stream)
             
