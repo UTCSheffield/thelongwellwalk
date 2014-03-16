@@ -15,6 +15,13 @@ buffer_length = 15      # How many seconds worth of video do we keep in the buff
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
 
+
+videosizelimit = 20000
+audiosizelimit = 10000
+sizewarning    = 50000
+
+loadavglimit = 1
+
 #Where are files stored
 outputbasedir =  os.path.expanduser('/home/pi/BPOA/')
 
@@ -33,6 +40,13 @@ statusLED_B = 8         # Blue LED short wire next to middle length
 videorecording = False  # Are we currently recording video
 audiorecording = False  # Are we currently recording audio
 tl_count  = 55          # Starting Timelapse count 55 means it will take 5 seconds to do first timlapse
+loadlimitbreached = False
+
+videosizelimitreached = False
+audiosizelimitreached = False
+sizewarningreached = False
+
+
 
 # Functions
 
@@ -54,23 +68,63 @@ def getFolderName(curtime, ext):
 def output_status():
     global videorecording, sizelimitreached, tl_count
     
-    if sizelimitreached:
-        No Lights = Broken
-        # DONE : Red = Disk space Too low, video will not record
-        GPIO.output( statusLED_R, True)
-    else:    
-        # DONE : Green = OK
-        GPIO.output( statusLED_G, True)
+    
+    
+    if (tl_count % 2):
+        # Mode lights
+        # TODO : Status - Off = Not running
+        # TODO : Status -Red = Disk space too low, audio & video will not record
+    
+        if audiosizelimitreached:
+            GPIO.output( statusLED_R, True)
+            GPIO.output( statusLED_G, False)
+            GPIO.output( statusLED_B, False)
+            
+        elif videorecording:
+            # TODO : Status -Blue = Video recording
+            GPIO.output( statusLED_R, False)
+            GPIO.output( statusLED_G, False)
+            GPIO.output( statusLED_B, True)
+            
+        elif audiorecording:
+            # TODO : Status -cyan = Audio recording
+            GPIO.output( statusLED_R, False)
+            GPIO.output( statusLED_G, True)
+            GPIO.output( statusLED_B, True)
+            
+        else:
+            # DONE : Status -green = Timelapse mode
+            GPIO.output( statusLED_R, False)
+            GPIO.output( statusLED_G, True)
+            GPIO.output( statusLED_B, False)
+            
+    else:
+        # TODO : Status -Warnings flash over the constant light
+        # TODO : Status -Flashing white = Transferring
+        #if transferring:
         
-        if videorecording:
-            # DONE : Green flashing yellow = Recording video (just my current hack as we have a broken blue line)
-            GPIO.output( statusLED_R, (tl_count % 2)) #flashing green / yellow for recording
-    
-    #GPIO.output( statusLED_R, videorecording)
-    
-    # blue wire is broken just at the moment 
-    #GPIO.output( statusLED_B, videorecording) 
-    
+        
+        if videosizelimitreached:
+            # TODO : Status -Flashing Yellow = Disk space getting low
+            GPIO.output( statusLED_R, True)
+            GPIO.output( statusLED_G, False)
+            GPIO.output( statusLED_B, False)
+            
+        elif sizewarningreached:
+            # TODO : Status -Flashing Red = Disk space too low, video will not record
+            GPIO.output( statusLED_R, True)
+            GPIO.output( statusLED_G, True)
+            GPIO.output( statusLED_B, False)
+            
+        
+        elif loadlimitbreached:
+            # TODO : Status -Flashing Magenta = CPU too stressed
+            GPIO.output( statusLED_R, True)
+            GPIO.output( statusLED_G, False)
+            GPIO.output( statusLED_B, True)
+            
+        
+        
 # Take a timelapse shot    
 def dotimelapse():
         stillnow = time.gmtime()
@@ -106,6 +160,21 @@ def write_video(stream):
     if (debug):
         print("buffer video ending "+videoname)
 
+def checkstatus :
+    # Have we run out of disk space
+    stats = os.statvfs(outputbasedir)
+    sizelimitreached = stats.f_bfree < f_favail_limit
+    
+    
+    videosizelimitreached = stats.f_bfree < videosizelimit
+    audiosizelimitreached = stats.f_bfree < audiosizelimit
+    sizewarningreached    = stats.f_bfree < sizewarning
+
+    
+    loadavg, loadavg5, loadavg15 = os.getloadavg()
+    
+    loadlimitbreached = loadavg>loadavglimit:
+        
 
 
 #Main Code Starts here
