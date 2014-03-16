@@ -1,6 +1,6 @@
 #!/bin/bash
 
-
+#ssh longwell@thelongwellwalk.org -p 2222
 rsync -r -u --append-verify [OPTION]... SRC [SRC]... [USER@]HOST::DEST
 
 
