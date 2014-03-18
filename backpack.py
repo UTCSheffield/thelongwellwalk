@@ -15,6 +15,9 @@ buffer_length = 15      # How many seconds worth of video do we keep in the buff
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
 
+poweroffclicktarget = 6
+poweroffclickstep = 2
+powerclickcount = 0
 
 videosizelimit = 20000
 audiosizelimit = 10000
@@ -29,11 +32,16 @@ outputbasedir =  os.path.expanduser('/home/pi/BPOA/')
 # Which GPIO pin does what job?
 videobutton = 11        # Video (currently rigged as momentary switch) 
 audiobutton = 12        # Audio (no code so far)
+poweroffbutton = 22        # Audio (no code so far)
 
-statusLED_R = 10        # Red LED, short wire on own
-statusLED_G = 7         # Green LED middle length wire
-statusLED_B = 8         # Blue LED short wire next to middle length
+statusLED_R = 15 #10        # Red LED, short wire on own
+statusLED_G = 18 # 7         # Green LED middle length wire
+statusLED_B = 16 # 8         # Blue LED short wire next to middle length
 #The GND wire is the longest and is wired through a switch so it only shows when pressed
+
+GPS_TXD     = 8
+GPS_RXD     = 10
+
 
 
 # Status variables
@@ -46,6 +54,7 @@ videosizelimitreached = False
 audiosizelimitreached = False
 sizewarningreached = False
 
+transferring = False
 
 
 # Functions
@@ -63,67 +72,75 @@ def getFolderName(curtime, ext):
         os.makedirs(name)
     return name
 
+def output_mode():
+    # Mode lights
+    # TODO : Status - Off = Not running
+    # TODO : Status -Red = Disk space too low, audio & video will not record
+
+    if audiosizelimitreached:
+        print("audiosizelimitreached Red =", audiosizelimitreached)
+        GPIO.output( statusLED_R, False)
+        GPIO.output( statusLED_G, True)
+        GPIO.output( statusLED_B, True)
+        
+    elif videorecording:
+        print("videorecording blue?=", videorecording)
+        # TODO : Status -Blue = Video recording
+        GPIO.output( statusLED_R, True)
+        GPIO.output( statusLED_G, True)
+        GPIO.output( statusLED_B, False)
+        
+    elif audiorecording:
+        print("audiorecording cyan?=", audiorecording)
+        # TODO : Status -cyan = Audio recording
+        GPIO.output( statusLED_R, True)
+        GPIO.output( statusLED_G, False)
+        GPIO.output( statusLED_B, False)
+        
+    else:
+        # DONE : Status -green = Timelapse mode
+        print("timelapse should be green")
+        GPIO.output( statusLED_R, True)
+        GPIO.output( statusLED_G, False)
+        GPIO.output( statusLED_B, True)
+    
 # Change the output LEDs to show Liam what is going on
 # TODO : #31 LED Output Codes
 def output_status():
-    global videorecording, sizelimitreached, tl_count
-    
-    
-    
+#    global videorecording, videosizelimitreached, tl_count
     if (tl_count % 2):
-        # Mode lights
-        # TODO : Status - Off = Not running
-        # TODO : Status -Red = Disk space too low, audio & video will not record
-    
-        if audiosizelimitreached:
-            GPIO.output( statusLED_R, True)
-            GPIO.output( statusLED_G, False)
-            GPIO.output( statusLED_B, False)
-            
-        elif videorecording:
-            # TODO : Status -Blue = Video recording
-            GPIO.output( statusLED_R, False)
-            GPIO.output( statusLED_G, False)
-            GPIO.output( statusLED_B, True)
-            
-        elif audiorecording:
-            # TODO : Status -cyan = Audio recording
-            GPIO.output( statusLED_R, False)
-            GPIO.output( statusLED_G, True)
-            GPIO.output( statusLED_B, True)
-            
-        else:
-            # DONE : Status -green = Timelapse mode
-            GPIO.output( statusLED_R, False)
-            GPIO.output( statusLED_G, True)
-            GPIO.output( statusLED_B, False)
-            
-    else:
+        
         # TODO : Status -Warnings flash over the constant light
-        # TODO : Status -Flashing white = Transferring
         #if transferring:
         
-        
-        if videosizelimitreached:
-            # TODO : Status -Flashing Yellow = Disk space getting low
-            GPIO.output( statusLED_R, True)
+        if transferring:
+            # TODO : Status -Flashing white = Transferring
+            GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, False)
+        
+        
+        elif videosizelimitreached:
+            # TODO : Status -Flashing Yellow = Disk space getting low
+            GPIO.output( statusLED_R, False)
+            GPIO.output( statusLED_G, True)
+            GPIO.output( statusLED_B, True)
             
         elif sizewarningreached:
             # TODO : Status -Flashing Red = Disk space too low, video will not record
-            GPIO.output( statusLED_R, True)
-            GPIO.output( statusLED_G, True)
-            GPIO.output( statusLED_B, False)
+            GPIO.output( statusLED_R, False)
+            GPIO.output( statusLED_G, False)
+            GPIO.output( statusLED_B, True)
             
         
         elif loadlimitbreached:
             # TODO : Status -Flashing Magenta = CPU too stressed
-            GPIO.output( statusLED_R, True)
-            GPIO.output( statusLED_G, False)
-            GPIO.output( statusLED_B, True)
+            GPIO.output( statusLED_R, False)
+            GPIO.output( statusLED_G, True)
+            GPIO.output( statusLED_B, False)
             
-        
+        else:
+            output_mode()
         
 # Take a timelapse shot    
 def dotimelapse():
@@ -160,22 +177,24 @@ def write_video(stream):
     if (debug):
         print("buffer video ending "+videoname)
 
-def checkstatus :
+def checkstatus():
     # Have we run out of disk space
     stats = os.statvfs(outputbasedir)
-    sizelimitreached = stats.f_bfree < f_favail_limit
-    
     
     videosizelimitreached = stats.f_bfree < videosizelimit
     audiosizelimitreached = stats.f_bfree < audiosizelimit
     sizewarningreached    = stats.f_bfree < sizewarning
-
-    
-    loadavg, loadavg5, loadavg15 = os.getloadavg()
-    
-    loadlimitbreached = loadavg>loadavglimit:
         
-
+    loadavg, loadavg5, loadavg15 = os.getloadavg()
+    loadlimitbreached = loadavg>loadavglimit
+    
+    if (debug):    
+        print("videosizelimitreached =", videosizelimitreached)
+        print("audiosizelimitreached =", audiosizelimitreached)
+        print("sizewarningreached =", sizewarningreached)
+        print("loadavg =", loadavg)
+        print("loadlimitbreached =", loadlimitbreached)
+    
 
 #Main Code Starts here
 
@@ -184,6 +203,9 @@ GPIO.cleanup()
 GPIO.setmode(GPIO.BOARD) # Use the standard RPi pin numbers
 GPIO.setup(videobutton,  GPIO.IN, pull_up_down=GPIO.PUD_DOWN)   # Set as Input which is usually off
 GPIO.setup(audiobutton, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)    # Set as Input which is usually off
+
+GPIO.setup(poweroffbutton, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)    # Set as Input which is usually off
+
 GPIO.setup(statusLED_R, GPIO.OUT)   # Set as Output
 GPIO.setup(statusLED_G, GPIO.OUT)   # Set as Output
 GPIO.setup(statusLED_B, GPIO.OUT)   # Set as Output
@@ -193,19 +215,22 @@ if (debug):
 
 with picamera.PiCamera() as camera:
     # Start up the Camera
-    #camera.resolution = (1920, 1080)   #1080P Full HD 1920x1080
-    camera.resolution = (1280, 720)     #720P HD 1280x720
+    camera.resolution = (1920, 1080)   #1080P Full HD 1920x1080
+    #camera.resolution = (1280, 720)     #720P HD 1280x720
     camera.framerate = 25
     stream = picamera.PiCameraCircularIO(camera, seconds=buffer_length)
     camera.start_recording(stream, format='h264')
     
     
-    GPIO.add_event_detect(videobutton, GPIO.RISING)  # Start listening out for button presses
+    GPIO.add_event_detect(videobutton, GPIO.BOTH)  # Start listening out for button presses
+    GPIO.add_event_detect(audiobutton, GPIO.BOTH)  # Start listening out for button presses
+    GPIO.add_event_detect(poweroffbutton, GPIO.BOTH)  # Start listening out for button presses
     
-    # Have we run out of disk space
-    stats = os.statvfs(outputbasedir)
-    sizelimitreached = stats.f_bfree < f_favail_limit
-                
+    # Have we run out of disk space            
+    checkstatus()
+    output_status()
+                    
+    
     try:
         while True:
             camera.wait_recording(1)    # Pause in loop
@@ -216,11 +241,40 @@ with picamera.PiCamera() as camera:
                 tl_count = 0
                 dotimelapse()
                 # Have we run out of disk space
-                stats = os.statvfs(outputbasedir)
-                sizelimitreached = stats.f_bfree < f_favail_limit
-            
+                checkstatus()
+                
+                
+                
             # Have we run out whilst recording video
-            if sizelimitreached and videorecording:
+            #if videosizelimitreached and videorecording:
+            #    camera.split_recording(stream)
+            #    videorecording = False
+            #    if (debug):
+            #        print ("limit breached video stopping")
+            
+            
+            if GPIO.event_detected(poweroffbutton):
+                powerclickcount = powerclickcount + poweroffclickstep
+
+            if powerclickcount >= poweroffclicktarget:
+                if (debug):
+                    print ("Power off triggered stopping")
+                
+                GPIO.output( statusLED_R, False) 
+                GPIO.output( statusLED_G, True)
+                GPIO.output( statusLED_B, True)
+        
+                camera.split_recording(stream)
+                videorecording = False
+                        
+                os.system("sudo shutdown -h now")
+
+            if powerclickcount > 0:
+                powerclickcount = powerclickcount - 1
+
+
+            # Have we run out whilst recording video
+            if videosizelimitreached and videorecording:
                 camera.split_recording(stream)
                 videorecording = False
                 if (debug):
@@ -228,9 +282,9 @@ with picamera.PiCamera() as camera:
                         
             
             # Has the video button been pressed?
-            if GPIO.event_detected(videobutton) and not sizelimitreached:
+            if GPIO.event_detected(videobutton) and not videosizelimitreached:
                 if (debug):
-                    print('Video Button Pressed!')
+                    print('Video Button Clicked!')
                 
                 # If we are recording stop recording
                 if videorecording:                
@@ -242,10 +296,11 @@ with picamera.PiCamera() as camera:
                     if (debug):
                         print("button video ending "+videoname)
                 else:
+                    videorecording = True
+                    output_mode()
                     # What should the video be called
                     now = time.gmtime()
                     videoname = getFolderName(now,'h264')+getFileName(now,'h264')
-                    videorecording = True
                     if (debug):
                         print("button video starting "+videoname)
                     
@@ -262,8 +317,8 @@ with picamera.PiCamera() as camera:
         camera.stop_recording()
         if (debug):
             print("stopping ending ")
-        GPIO.output( statusLED_R, False) 
-        GPIO.output( statusLED_G, False)
-        GPIO.output( statusLED_B, False)
+        GPIO.output( statusLED_R, True) 
+        GPIO.output( statusLED_G, True)
+        GPIO.output( statusLED_B, True)
         GPIO.cleanup()
 
