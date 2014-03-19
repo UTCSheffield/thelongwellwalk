@@ -8,6 +8,7 @@ import time             # Time and Date functions
 import os               # Operating system information and functions
 import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
+import sys
 
 #Config
 tl_target = 60          # How long between each Timelapse shot
@@ -255,6 +256,10 @@ with picamera.PiCamera() as camera:
             
             if GPIO.event_detected(poweroffbutton):
                 powerclickcount = powerclickcount + poweroffclickstep
+                if (debug):
+                    print("powerclickcount =", powerclickcount)
+            elif powerclickcount > 0:
+                powerclickcount = powerclickcount - 1
 
             if powerclickcount >= poweroffclicktarget:
                 if (debug):
@@ -268,10 +273,9 @@ with picamera.PiCamera() as camera:
                 videorecording = False
                         
                 os.system("sudo shutdown -h now")
+                sys.exit()
 
-            if powerclickcount > 0:
-                powerclickcount = powerclickcount - 1
-
+            
 
             # Have we run out whilst recording video
             if videosizelimitreached and videorecording:
