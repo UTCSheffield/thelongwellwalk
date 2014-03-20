@@ -35,9 +35,9 @@ videobutton = 11        # Video (currently rigged as momentary switch)
 audiobutton = 12        # Audio (no code so far)
 poweroffbutton = 12        # Poweroff button (can be same as audio)
 
-statusLED_R = 15 #10        # Red LED, short wire on own
-statusLED_G = 18 # 7         # Green LED middle length wire
-statusLED_B = 16 # 8         # Blue LED short wire next to middle length
+statusLED_R = 18          # Red LED, short wire on own
+statusLED_G = 16          # Green LED middle length wire
+statusLED_B = 15          # Blue LED short wire next to middle length
 #The GND wire is the longest and is wired through a switch so it only shows when pressed
 
 GPS_TXD     = 8
@@ -110,10 +110,12 @@ def output_status():
     global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     
     
-    print("tl_count =", tl_count)
-    if (tl_count % 2):
-        
+    if (tl_count % 20) == 0:
         if (debug):
+        
+            print("videorecording blue?=", videorecording)
+            print("audiorecording cyan?=", audiorecording)
+        
             print("Output status:-")
             print("transferring =", transferring)
             print("videosizelimitreached =", videosizelimitreached)
@@ -121,9 +123,7 @@ def output_status():
             print("sizewarningreached =", sizewarningreached)
             print("loadlimitbreached =", loadlimitbreached)
         
-        # TODO : Status -Warnings flash over the constant light
-        #if transferring:
-        
+    if (tl_count % 2):        
         if transferring:
             # TODO : Status -Flashing white = Transferring
             GPIO.output( statusLED_R, False)
