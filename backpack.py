@@ -9,12 +9,22 @@ import os               # Operating system information and functions
 import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
 import sys
+import alsaaudio
+
 
 #Config
 tl_target = 60          # How long between each Timelapse shot
 buffer_length = 15      # How many seconds worth of video do we keep in the buffer
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
+
+duration_step = 1
+duration_timelapse = 60
+
+next_step = 1
+next_timelapse = 60
+
+cycle_wait = 0.001
 
 poweroffclicktarget = 6
 poweroffclickstep = 2
@@ -232,121 +242,181 @@ GPIO.setup(statusLED_B, GPIO.OUT)   # Set as Output
 if (debug):
     print("backback started")
 
+#start audio
+
+# Open the device in nonblocking capture mode. The last argument could
+# just as well have been zero for blocking mode. Then we could have
+# left out the sleep call in the bottom of the loop
+card = 'default'
+inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK, card)
+
+# Set attributes: Mono, 44100 Hz, 16 bit little endian samples
+inp.setchannels(1)
+inp.setrate(16000)
+inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
+
+# The period size controls the internal number of frames per period.
+# The significance of this parameter is documented in the ALSA api.
+# For our purposes, it is suficcient to know that reads from the device
+# will return this many frames. Each frame being 2 bytes long.
+# This means that the reads below will return either 320 bytes of data
+# or 0 bytes of data. The latter is possible because we are in nonblocking
+# mode.
+inp.setperiodsize(160)
+inp.pause()
+
+
 with picamera.PiCamera() as camera:
     # Start up the Camera
     camera.resolution = (1920, 1080)   #1080P Full HD 1920x1080
     #camera.resolution = (1280, 720)     #720P HD 1280x720
     camera.framerate = 25
     stream = picamera.PiCameraCircularIO(camera, seconds=buffer_length)
-    camera.start_recording(stream, format='h264')
+    camera.start_recording(stream, format='h264')    
     
+    duration_step = 1
+    duration_timelapse = 60
+    duration_first_timelapse = 5
+    
+    
+    current_time = time.clock()
+    next_step = current_time + duration_step
+    next_timelapse = current_time + duration_first_timelapse
+
+    
+    # Have we run out of disk space            
+    checkstatus()
+    output_status()
     
     GPIO.add_event_detect(videobutton, GPIO.BOTH)  # Start listening out for button presses
     GPIO.add_event_detect(audiobutton, GPIO.BOTH)  # Start listening out for button presses
     if not poweroffbutton == audiobutton: 
         GPIO.add_event_detect(poweroffbutton, GPIO.BOTH)  # Start listening out for button presses
-    
-    # Have we run out of disk space            
-    checkstatus()
-    output_status()
        
     try:
         while True:
-            camera.wait_recording(1)    # Pause in loop
+            # TODO : Move to 0.001 change the tick and timelapse to times
+            camera.wait_recording(cycle_wait)    # Pause in loop
+            current_time =  time.clock()
             
-            # Is it time to take a timelapse shot
-            tl_count = tl_count + 1
-            if (tl_count >= tl_target):
-                tl_count = 0
-                dotimelapse()
-                # Have we run out of disk space
-                checkstatus()
-                
-                
-                
-            # Have we run out whilst recording video
-            #if videosizelimitreached and videorecording:
-            #    camera.split_recording(stream)
-            #    videorecording = False
-            #    if (debug):
-            #        print ("limit breached video stopping")
+            #audio stuff
+            if audiorecording:
+                l, data = inp.read()
+                if l:
+                    audiofile.write(data)
             
             
-            if GPIO.event_detected(poweroffbutton):
-                powerclickcount = powerclickcount + poweroffclickstep
-                if (debug):
-                    print("powerclickcount =", powerclickcount)
-            
-            elif powerclickcount > 0:
-                powerclickcount = powerclickcount - 1
-
-            if powerclickcount >= poweroffclicktarget:
-                if (debug):
-                    print ("Power off triggered stopping")
+            #visual stuff
+            if(current_time >= next_step)
+                next_step = current_time + duration_step
                 
-                GPIO.output( statusLED_R, False) 
-                GPIO.output( statusLED_G, True)
-                GPIO.output( statusLED_B, True)
-        
-                camera.split_recording(stream)
-                videorecording = False
+            
+                if(current_time >= next_timelapse)                
+                    # Is it time to take a timelapse shot
+                    tl_count = tl_count + 1
+                    if (tl_count >= tl_target):
+                        tl_count = 0
                         
-                os.system("sudo shutdown -h now")
-                sys.exit()
-
-            
-
-            # Have we run out whilst recording video
-            if videosizelimitreached and videorecording:
-                camera.split_recording(stream)
-                videorecording = False
-                if (debug):
-                    print ("limit breached video stopping")
-            
-            if GPIO.event_detected(audiobutton) and not sizelimitreached:
-                # TODO :34 Audio
-                # this is the audio blog button
-                if (debug):
-                    print('Audio Button Pressed!')
+                    dotimelapse()
+                    next_timelapse = current_time + duration_timelapse
+                    # Have we run out of disk space
+                    checkstatus()
+                
                     
-                        
-            
-            # Has the video button been pressed?
-            if GPIO.event_detected(videobutton) and not videosizelimitreached:
-                if (debug):
-                    print('Video Button Clicked!')
+                    
                 
-                # If we are recording stop recording
-                if videorecording:
+                
+                if GPIO.event_detected(poweroffbutton):
+                    powerclickcount = powerclickcount + poweroffclickstep
                     if (debug):
-                        print('Button pressed to stop ')
-                    # Go back to recording to the ring buffer not the file
+                        print("powerclickcount =", powerclickcount)
+                
+                elif powerclickcount > 0:
+                    powerclickcount = powerclickcount - 1
+    
+                if powerclickcount >= poweroffclicktarget:
+                    if (debug):
+                        print ("Power off triggered stopping")
+                    
+                    GPIO.output( statusLED_R, False) 
+                    GPIO.output( statusLED_G, True)
+                    GPIO.output( statusLED_B, True)
+            
+                    camera.split_recording(stream)
+                    videorecording = False
+                            
+                    os.system("sudo shutdown -h now")
+                    sys.exit()
+    
+                # Have we run out whilst recording video
+                if audiosizelimitreached and audiorecording:
+                    inp.pause()
+                    audiofile.close()
+                    audiorecording = False
+                    if (debug):
+                        print ("limit breached audio stopping")
+                
+                if GPIO.event_detected(audiobutton) and not audiosizelimitreached:
+                    # TODO :34 Audio
+                    # this is the audio blog button
+                    if (debug):
+                        print('Audio Button Pressed!')
+                        
+                        if audiorecording:
+                            inp.pause()
+                            audiofile.close()
+                            audiorecording = False
+                            
+                        else:
+                            audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+                            audiofile = open(audiofilename, 'wb')
+                            inp.pause(0)
+                        
+                            
+                # Have we run out whilst recording video
+                if videosizelimitreached and videorecording:
                     camera.split_recording(stream)
                     videorecording = False
                     if (debug):
-                        print("button video ending "+videoname)
-                else:
-                    videorecording = True
-                    output_mode()
-                    # What should the video be called
-                    now = time.gmtime()
-                    videoname = getFolderName(now,'h264')+getFileName(now,'h264')
+                        print ("limit breached video stopping")
+                
+                
+                # Has the video button been pressed?
+                if GPIO.event_detected(videobutton) and not videosizelimitreached:
                     if (debug):
-                        print("button video starting "+videoname)
+                        print('Video Button Clicked!')
                     
-                    # Send video to the file
-                    camera.split_recording(videoname)
-                    
-                    # TODO : #34 Audio Recording
-                    # TODO : the video triggers the wide angle audio
-                    # TODO : workout if we can have an audio ring buffer
-                    
-                    
-                    # Save the ring buffer to the disk
-                    write_video(stream)
-            
-            # Set the output lights
-            output_status()
+                    # If we are recording stop recording
+                    if videorecording:
+                        if (debug):
+                            print('Button pressed to stop ')
+                        # Go back to recording to the ring buffer not the file
+                        camera.split_recording(stream)
+                        videorecording = False
+                        if (debug):
+                            print("button video ending "+videoname)
+                    else:
+                        videorecording = True
+                        output_mode()
+                        # What should the video be called
+                        now = time.gmtime()
+                        videoname = getFolderName(now,'h264')+getFileName(now,'h264')
+                        if (debug):
+                            print("button video starting "+videoname)
+                        
+                        # Send video to the file
+                        camera.split_recording(videoname)
+                        
+                        # TODO : #34 Audio Recording
+                        # TODO : the video triggers the wide angle audio
+                        # TODO : workout if we can have an audio ring buffer
+                        
+                        
+                        # Save the ring buffer to the disk
+                        write_video(stream)
+                
+                # Set the output lights
+                output_status()
 
     finally:
         # Tidy up when the program stops
