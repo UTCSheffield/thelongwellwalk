@@ -356,7 +356,7 @@ with picamera.PiCamera() as camera:
                     if (debug):
                         print ("limit breached audio stopping")
                 
-                if GPIO.event_detected(audiobutton) and not audiosizelimitreached:
+                if GPIO.event_detected(audiobutton) and not audiosizelimitreached and not videorecording:
                     # TODO :34 Audio
                     # this is the audio blog button
                     if (debug):
@@ -368,6 +368,7 @@ with picamera.PiCamera() as camera:
                             audiorecording = False
                             
                         else:
+                            now = time.gmtime()
                             audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
                             audiofile = open(audiofilename, 'wb')
                             inp.pause(0)
@@ -376,6 +377,10 @@ with picamera.PiCamera() as camera:
                 # Have we run out whilst recording video
                 if videosizelimitreached and videorecording:
                     camera.split_recording(stream)
+                    inp.pause()
+                    audiofile.close()
+                    audiorecording = False
+                    
                     videorecording = False
                     if (debug):
                         print ("limit breached video stopping")
@@ -393,6 +398,10 @@ with picamera.PiCamera() as camera:
                         # Go back to recording to the ring buffer not the file
                         camera.split_recording(stream)
                         videorecording = False
+                        inp.pause()
+                        audiofile.close()
+                        audiorecording = False
+                        
                         if (debug):
                             print("button video ending "+videoname)
                     else:
@@ -401,6 +410,11 @@ with picamera.PiCamera() as camera:
                         # What should the video be called
                         now = time.gmtime()
                         videoname = getFolderName(now,'h264')+getFileName(now,'h264')
+
+                        audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+                        audiofile = open(audiofilename, 'wb')
+                        inp.pause(0)
+                        
                         if (debug):
                             print("button video starting "+videoname)
                         
