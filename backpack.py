@@ -9,6 +9,7 @@ import os               # Operating system information and functions
 import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
 import sys
+import getopt
 import alsaaudio
 
 
@@ -247,7 +248,7 @@ if (debug):
 # Open the device in nonblocking capture mode. The last argument could
 # just as well have been zero for blocking mode. Then we could have
 # left out the sleep call in the bottom of the loop
-card = 'default'
+card = 'CODEC'
 inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK, card)
 
 # Set attributes: Mono, 44100 Hz, 16 bit little endian samples
@@ -263,7 +264,7 @@ inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
 # or 0 bytes of data. The latter is possible because we are in nonblocking
 # mode.
 inp.setperiodsize(160)
-inp.pause()
+#inp.pause()
 
 
 with picamera.PiCamera() as camera:
@@ -307,11 +308,11 @@ with picamera.PiCamera() as camera:
             
             
             #visual stuff
-            if(current_time >= next_step)
+            if(current_time >= next_step):
                 next_step = current_time + duration_step
                 
             
-                if(current_time >= next_timelapse)                
+                if(current_time >= next_timelapse):                
                     # Is it time to take a timelapse shot
                     tl_count = tl_count + 1
                     if (tl_count >= tl_target):

@@ -23,7 +23,9 @@ import getopt
 import alsaaudio
 
 
-card = 'default'
+print(alsaaudio.cards())
+
+card = 'CODEC'
 filename = "test1.wav"
 
 f = open(filename, 'wb')
