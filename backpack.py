@@ -22,6 +22,7 @@ powerclickcount = 0
 
 videosizelimit = 20000
 audiosizelimit = 10000
+jpgsizelimit = 10000
 sizewarning    = 50000
 
 loadavglimit = 1.25
@@ -51,6 +52,7 @@ loadlimitbreached = False
 videosizelimitreached = False
 audiosizelimitreached = False
 sizewarningreached = False
+jpgsizelimitreached = False
 transferring = False
 
 
@@ -70,15 +72,19 @@ def getFolderName(curtime, ext):
     return name
 
 def output_mode():
-    global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
+    global jpgsizelimitreached, videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
 
     # Mode lights
     # TODO : Status - Off = Not running
     # TODO : Status -Red = Disk space too low, audio & video will not record
 
-    if audiosizelimitreached:
+    
+    if jpgsizelimitreached:
         if (debug):
-            print("audiosizelimitreached Red =", audiosizelimitreached)
+            print("jpgsizelimitreached Red =", audiosizelimitreached)
+    #if audiosizelimitreached:
+    #    if (debug):
+    #        print("audiosizelimitreached Red =", audiosizelimitreached)
         GPIO.output( statusLED_R, False)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, True)
@@ -107,7 +113,7 @@ def output_mode():
 # Change the output LEDs to show Liam what is going on
 # TODO : #31 LED Output Codes
 def output_status():
-    global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
+    global jpgsizelimitreached, videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     
     
     if (tl_count % 20) == 0:
@@ -157,7 +163,7 @@ def output_status():
         
 # Take a timelapse shot    
 def dotimelapse():
-    if not audiosizelimitreached:
+    if not jpgsizelimitreached:
         stillnow = time.gmtime()
         stillname = getFolderName(stillnow,'jpg')+getFileName(stillnow,'jpg')
         
@@ -192,14 +198,32 @@ def write_video(stream):
         print("buffer video ending "+videoname)
 
 def checkstatus():
-    global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
+    global jpgsizelimitreached, videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     # Have we run out of disk space
-    stats = os.statvfs(outputbasedir)
     
+    now = time.gmtime()
+    
+    videofolder = getFolderName(now,'h264')
+    stats = os.statvfs(videofolder)
     videosizelimitreached = stats.f_bfree < videosizelimit
+    if (debug):
+        print("video.f_bfree =", stats.f_bfree)
     
+    audiofolder = getFolderName(now,'wav')
+    stats = os.statvfs(audiofolder)
     audiosizelimitreached = stats.f_bfree < audiosizelimit
+    if (debug):
+        print("audio.f_bfree =", stats.f_bfree)
     sizewarningreached    = stats.f_bfree < sizewarning
+        
+    
+    jpgfolder = getFolderName(now,'jpg')
+    stats = os.statvfs(jpgfolder)
+    jpgsizelimitreached = stats.f_bfree < jpgsizelimit
+    if (debug):
+        print("jpg.f_bfree =", stats.f_bfree)
+    sizewarningreached    = sizewarningreached or (stats.f_bfree < sizewarning)
+    
         
     loadavg, loadavg5, loadavg15 = os.getloadavg()
     loadlimitbreached = loadavg>loadavglimit
@@ -209,6 +233,8 @@ def checkstatus():
         print("stats.f_bfree =", stats.f_bfree)
         print("videosizelimitreached =", videosizelimitreached)
         print("audiosizelimitreached =", audiosizelimitreached)
+        
+        print("jpgsizelimitreached =", jpgsizelimitreached)
         print("sizewarningreached =", sizewarningreached)
         print("loadavg =", loadavg)
         print("loadlimitbreached =", loadlimitbreached)
