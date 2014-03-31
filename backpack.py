@@ -9,9 +9,12 @@ import os               # Operating system information and functions
 import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
 import sys
+from GPSController import *
+import math
 
 #Config
-tl_target = 60          # How long between each Timelapse shot
+#tl_target = 60          # How long between each Timelapse shot
+tl_target = 20          # How long between each Timelapse shot
 buffer_length = 15      # How many seconds worth of video do we keep in the buffer
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
@@ -73,8 +76,8 @@ def output_mode():
     global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
 
     # Mode lights
-    # TODO : Status - Off = Not running
-    # TODO : Status -Red = Disk space too low, audio & video will not record
+    # DONE : Status - Off = Not running
+    # DONE : Status -Red = Disk space too low, audio & video will not record
 
     if audiosizelimitreached:
         if (debug):
@@ -85,14 +88,14 @@ def output_mode():
         
     elif videorecording:
         #print("videorecording blue?=", videorecording)
-        # TODO : Status -Blue = Video recording
+        # DONE : Status -Blue = Video recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, False)
         
     elif audiorecording:
         #print("audiorecording cyan?=", audiorecording)
-        # TODO : Status -cyan = Audio recording
+        # DONE : Status -cyan = Audio recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
         GPIO.output( statusLED_B, False)
@@ -105,13 +108,13 @@ def output_mode():
         GPIO.output( statusLED_B, True)
     
 # Change the output LEDs to show Liam what is going on
-# TODO : #31 LED Output Codes
+# DONE : #31 LED Output Codes
 def output_status():
     global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     
     
     if (tl_count % 20) == 0:
-        if (debug):
+        if (False and debug):
         
             print("videorecording blue?=", videorecording)
             print("audiorecording cyan?=", audiorecording)
@@ -125,26 +128,26 @@ def output_status():
         
     if (tl_count % 2):        
         if transferring:
-            # TODO : Status -Flashing white = Transferring
+            # DONE : Status -Flashing white = Transferring
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, False)
         
         elif videosizelimitreached:
-            # TODO : Status -Flashing Yellow = Disk space getting low
+            # DONE : Status -Flashing Yellow = Disk space getting low
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, True)
             GPIO.output( statusLED_B, True)
             
         elif sizewarningreached:
-            # TODO : Status -Flashing Red = Disk space too low, video will not record
+            # DONE : Status -Flashing Red = Disk space too low, video will not record
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, True)
             
         
         elif loadlimitbreached:
-            # TODO : Status -Flashing Magenta = CPU too stressed
+            # DONE : Status -Flashing Magenta = CPU too stressed
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, True)
             GPIO.output( statusLED_B, False)
@@ -158,13 +161,73 @@ def output_status():
 # Take a timelapse shot    
 def dotimelapse():
     if not audiosizelimitreached:
+        
+        
+        camera.exif_tags['EXIF.Copyright'] = 'Copyright (c) 2014 the Long Well Walk'
+        
+        if not (math.isnan(gpsc.fix.latitude) or math.isnan(gpsc.fix.longitude)) and gpsc.fix.latitude and gpsc.fix.longitude:
+            if (debug):
+                print "latitude ", gpsc.fix.latitude
+                print "longitude ", gpsc.fix.longitude
+                print "altitude (m)", gpsc.fix.altitude
+            
+            
+            # TODO :  Set GPS data
+            
+            
+            #camera.exif_tags['GPS.Copyright'] = 'Copyright (c) 2013 Foo Industries'
+            camera.exif_tags['GPS.GPSVersionID'] = "2.2.0.0"
+    
+            if gpsc.fix.latitude >= 0:
+                camera.exif_tags['GPS.GPSLatitudeRef'] = "N"
+            else:
+                camera.exif_tags['GPS.GPSLatitudeRef'] = "S"
+            
+            #dd/1,mmmm/100,0/1
+            lat = math.fabs(gpsc.fix.latitude)
+            deg = math.floor(lat)
+            degmin = math.floor(10000 * (lat - deg))
+            camera.exif_tags['GPS.GPSLatitude'] = '{},{},00'.format(deg, degmin)
+            
+    
+            if gpsc.fix.longitude >= 0:
+                camera.exif_tags['GPS.GPSLongitudeRef'] = "E"
+            else:
+                camera.exif_tags['GPS.GPSLongitudeRef'] = "W"
+            
+            #dd/1,mmmm/100,0/1
+            longitude = math.fabs(gpsc.fix.longitude)
+            deg = math.floor(longitude)
+            degmin = math.floor(10000 * (longitude - deg))
+            camera.exif_tags['GPS.GPSLongitude'] = '{},{},00'.format(deg, degmin)
+            
+    
+            if gpsc.fix.altitude >= 0:
+                camera.exif_tags['GPS.GPSAltitudeRef'] = "0"
+            else:
+                camera.exif_tags['GPS.GPSAltitudeRef'] = "1"
+            
+            camera.exif_tags['GPS.GPSAltitude'] ='{}'.format(math.fabs(gpsc.fix.altitude))
+            
+            gpslogline = '{},{},{},{}'.format(time.time(), gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
+            
+            #file.write(str)
+            
+            if (debug):
+                print("time.time =", time.time())
+                print("gpslogline =", gpslogline)
+
+
+        #GPSTimeStamp, GPSSatellites, GPSStatus, GPSMeasureMode, GPSDOP, GPSSpeedRef, GPSSpeed, GPSTrackRef, GPSTrack, GPSImgDirectionRef, GPSImgDirection, GPSMapDatum, GPSDestLatitudeRef, GPSDestLatitude, GPSDestLongitudeRef, GPSDestLongitude, GPSDestBearingRef, GPSDestBearing, GPSDestDistanceRef, GPSDestDistance, GPSProcessingMethod, GPSAreaInformation, GPSDateStamp, GPSDifferential
+        
         stillnow = time.gmtime()
         stillname = getFolderName(stillnow,'jpg')+getFileName(stillnow,'jpg')
         
         camera.capture(stillname, use_video_port=True)
         if (debug):
             print("still "+stillname)
-      
+    
+    
 def write_video(stream):
     # Write the entire content of the circular buffer to disk. No need to
     # lock the stream here as we're definitely not writing to it
@@ -205,16 +268,16 @@ def checkstatus():
     loadlimitbreached = loadavg>loadavglimit
     
     if (debug):
-        print("Checkstatus:-")
-        print("stats.f_bfree =", stats.f_bfree)
-        print("videosizelimitreached =", videosizelimitreached)
-        print("audiosizelimitreached =", audiosizelimitreached)
-        print("sizewarningreached =", sizewarningreached)
-        print("loadavg =", loadavg)
-        print("loadlimitbreached =", loadlimitbreached)
+        print("Checkstatus:-","stats.f_bfree =", stats.f_bfree,"videosizelimitreached =", videosizelimitreached, "audiosizelimitreached =", audiosizelimitreached, "sizewarningreached =", sizewarningreached,"loadavg =", loadavg, "loadlimitbreached =", loadlimitbreached)
     
 
 #Main Code Starts here
+
+#create GPS controller
+gpsc = GpsController()
+
+#start controller
+gpsc.start()
 
 # GPIO setup
 GPIO.cleanup()
@@ -258,10 +321,24 @@ with picamera.PiCamera() as camera:
             # Is it time to take a timelapse shot
             tl_count = tl_count + 1
             if (tl_count >= tl_target):
+                # TODO : check GPS time
+                if gpsc.utc and gpsc.utc<>"None":
+                    print "time utc ", gpsc.utc #, " + ", gpsc.fix.time
+                    
+                    sattime = time.mktime(time.strptime(gpsc.utc, "%Y-%m-%dT%H:%M:%S.000Z"))
+                    print("sattime =", sattime)
+                    print("time.time =", time.time())
+                    if (time.time() < sattime):
+                        print "setting time"
+                        os.system('date -s %s' % gpsc.utc)
+                
+                    print gpsc.fix
+                
                 tl_count = 0
                 dotimelapse()
                 # Have we run out of disk space
                 checkstatus()
+                
                 
                 
                 
@@ -345,4 +422,7 @@ with picamera.PiCamera() as camera:
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, True)
         GPIO.cleanup()
+        #stop GPS controller
+        gpsc.stopController()
+        gpsc.join()
 
