@@ -76,8 +76,8 @@ def output_mode():
     global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
 
     # Mode lights
-    # DONE : Status - Off = Not running
-    # DONE : Status -Red = Disk space too low, audio & video will not record
+    # Status - Off = Not running
+    # Status -Red = Disk space too low, audio & video will not record
 
     if audiosizelimitreached:
         if (debug):
@@ -88,27 +88,26 @@ def output_mode():
         
     elif videorecording:
         #print("videorecording blue?=", videorecording)
-        # DONE : Status -Blue = Video recording
+        # Status -Blue = Video recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, False)
         
     elif audiorecording:
         #print("audiorecording cyan?=", audiorecording)
-        # DONE : Status -cyan = Audio recording
+        # Status -cyan = Audio recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
         GPIO.output( statusLED_B, False)
         
     else:
-        # DONE : Status -green = Timelapse mode
+        # Status -green = Timelapse mode
         #print("timelapse should be green")
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
         GPIO.output( statusLED_B, True)
     
-# Change the output LEDs to show Liam what is going on
-# DONE : #31 LED Output Codes
+
 def output_status():
     global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     
@@ -128,26 +127,26 @@ def output_status():
         
     if (tl_count % 2):        
         if transferring:
-            # DONE : Status -Flashing white = Transferring
+            # Status -Flashing white = Transferring
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, False)
         
         elif videosizelimitreached:
-            # DONE : Status -Flashing Yellow = Disk space getting low
+            # Status -Flashing Yellow = Disk space getting low
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, True)
             GPIO.output( statusLED_B, True)
             
         elif sizewarningreached:
-            # DONE : Status -Flashing Red = Disk space too low, video will not record
+            # Status -Flashing Red = Disk space too low, video will not record
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, True)
             
         
         elif loadlimitbreached:
-            # DONE : Status -Flashing Magenta = CPU too stressed
+            # Status -Flashing Magenta = CPU too stressed
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, True)
             GPIO.output( statusLED_B, False)
@@ -172,10 +171,9 @@ def dotimelapse():
                 print "altitude (m)", gpsc.fix.altitude
             
             
-            # TODO :  Set GPS data
+            # TODO :  Test that the GPS data set in EXIF properl;y fits the spec and is readable
+            # Spec here http://www.digicamsoft.com/exif22/exif22/html/exif22_53.htm
             
-            
-            #camera.exif_tags['GPS.Copyright'] = 'Copyright (c) 2013 Foo Industries'
             camera.exif_tags['GPS.GPSVersionID'] = "2.2.0.0"
     
             if gpsc.fix.latitude >= 0:
@@ -211,7 +209,8 @@ def dotimelapse():
             
             gpslogline = '{},{},{},{}'.format(time.time(), gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
             
-            #file.write(str)
+            # TODO : Write the gpslogline to a GPS file.
+            #file.write(gpslogline)
             
             if (debug):
                 print("time.time =", time.time())
@@ -321,7 +320,7 @@ with picamera.PiCamera() as camera:
             # Is it time to take a timelapse shot
             tl_count = tl_count + 1
             if (tl_count >= tl_target):
-                # TODO : check GPS time
+                # check GPS time and if it ahead of RPi time update RPi time
                 if gpsc.utc and gpsc.utc<>"None":
                     print "time utc ", gpsc.utc #, " + ", gpsc.fix.time
                     
