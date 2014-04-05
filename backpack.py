@@ -10,13 +10,16 @@ import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
 import sys
 import getopt
-
+import subprocess
 
 #Config
 tl_target = 60          # How long between each Timelapse shot
 buffer_length = 15      # How many seconds worth of video do we keep in the buffer
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
+
+arecordcmd = "arecord -D plughw:1,0 "
+# TODO : use the --max-file-time on the audio files
 
 duration_step = 1
 duration_timelapse = 60
@@ -242,22 +245,6 @@ GPIO.setup(statusLED_B, GPIO.OUT)   # Set as Output
 if (debug):
     print("backback started")
 
-#start audio
-
-# Open the device in nonblocking capture mode. The last argument could
-# just as well have been zero for blocking mode. Then we could have
-# left out the sleep call in the bottom of the loop
-
-
-alsacards = alsaaudio.cards()
-if (debug):
-    print("alsacards =", alsacards)
-
-secondcard = alsacards[1]
-
-card = secondcard #'CODEC'
-
-
 with picamera.PiCamera() as camera:
     # Start up the Camera
     camera.resolution = (1920, 1080)   #1080P Full HD 1920x1080
@@ -339,6 +326,10 @@ with picamera.PiCamera() as camera:
                 if audiosizelimitreached and audiorecording:
                     # TODO : Stop recording
                     audiorecording = False
+                    AudioRecordingProcess.kill()
+                    AudioRecordingProcess.poll()
+                                
+                    
                     if (debug):
                         print ("limit breached audio stopping")
                 
@@ -350,24 +341,28 @@ with picamera.PiCamera() as camera:
                         print('Audio Button Pressed!')
                         
                         if audiorecording:
-                            if (not videorecording) and (not audiosizelimitreached):
-                                # TODO : Stop recording
+                            if (not videorecording) or audiosizelimitreached:
                                 audiorecording = False
-                            
+                                AudioRecordingProcess.kill()
+                                AudioRecordingProcess.poll()
+                                
+                                if (debug):
+                                    print ("ending recording")
+                
                         else:
                             now = time.gmtime()
-                            # TODO : Start recording
                             audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
-                            audiofile = open(audiofilename, 'wb')
-                            #inp.pause(0)
+                            AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
+                            audiorecording = True
+                            
+                            if (debug):
+                                print ("recordinging into ", audiofilename)
                         
+                            
                             
                 # Have we run out whilst recording video
                 if videosizelimitreached and videorecording:
                     camera.split_recording(stream)
-                    inp.pause()
-                    audiofile.close()
-                    audiorecording = False
                     
                     videorecording = False
                     if (debug):
@@ -386,9 +381,10 @@ with picamera.PiCamera() as camera:
                         # Go back to recording to the ring buffer not the file
                         camera.split_recording(stream)
                         videorecording = False
-                        inp.pause()
-                        audiofile.close()
                         audiorecording = False
+                        AudioRecordingProcess.kill()
+                        AudioRecordingProcess.poll()
+                                
                         
                         if (debug):
                             print("button video ending "+videoname)
@@ -400,7 +396,9 @@ with picamera.PiCamera() as camera:
                         videoname = getFolderName(now,'h264')+getFileName(now,'h264')
 
                         audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+                        
                         # TODO : Start recording audio
+                        AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
                         
                         
                         if (debug):
