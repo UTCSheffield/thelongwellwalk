@@ -10,7 +10,6 @@ import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
 import sys
 import getopt
-import alsaaudio
 
 
 #Config
@@ -257,28 +256,6 @@ if (debug):
 secondcard = alsacards[1]
 
 card = secondcard #'CODEC'
-inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK, card)
-
-# Set attributes: Mono, 44100 Hz, 16 bit little endian samples
-inp.setchannels(1)
-inp.setrate(16000)
-inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-
-# The period size controls the internal number of frames per period.
-# The significance of this parameter is documented in the ALSA api.
-# For our purposes, it is suficcient to know that reads from the device
-# will return this many frames. Each frame being 2 bytes long.
-# This means that the reads below will return either 320 bytes of data
-# or 0 bytes of data. The latter is possible because we are in nonblocking
-# mode.
-inp.setperiodsize(160)
-audiorecording = True
-now = time.gmtime()
-videoname = getFolderName(now,'h264')+getFileName(now,'h264')
-
-audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
-audiofile = open(audiofilename, 'wb')
-#inp.pause()
 
 
 with picamera.PiCamera() as camera:
@@ -313,14 +290,7 @@ with picamera.PiCamera() as camera:
             # TODO : Move to 0.001 change the tick and timelapse to times
             camera.wait_recording(cycle_wait)    # Pause in loop
             current_time =  time.clock()
-            
-            #audio stuff
-            if audiorecording:
-                l, data = inp.read()
-                if l:
-                    audiofile.write(data)
-            
-            
+                        
             #visual stuff
             if(current_time >= next_step):
                 next_step = current_time + duration_step
@@ -367,8 +337,7 @@ with picamera.PiCamera() as camera:
     
                 # Have we run out whilst recording video
                 if audiosizelimitreached and audiorecording:
-                    inp.pause()
-                    audiofile.close()
+                    # TODO : Stop recording
                     audiorecording = False
                     if (debug):
                         print ("limit breached audio stopping")
@@ -382,12 +351,12 @@ with picamera.PiCamera() as camera:
                         
                         if audiorecording:
                             if (not videorecording) and (not audiosizelimitreached):
-                                inp.pause()
-                                audiofile.close()
+                                # TODO : Stop recording
                                 audiorecording = False
                             
                         else:
                             now = time.gmtime()
+                            # TODO : Start recording
                             audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
                             audiofile = open(audiofilename, 'wb')
                             #inp.pause(0)
@@ -431,8 +400,8 @@ with picamera.PiCamera() as camera:
                         videoname = getFolderName(now,'h264')+getFileName(now,'h264')
 
                         audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
-                        audiofile = open(audiofilename, 'wb')
-                        inp.pause(0)
+                        # TODO : Start recording audio
+                        
                         
                         if (debug):
                             print("button video starting "+videoname)
