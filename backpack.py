@@ -248,7 +248,15 @@ if (debug):
 # Open the device in nonblocking capture mode. The last argument could
 # just as well have been zero for blocking mode. Then we could have
 # left out the sleep call in the bottom of the loop
-card = 'CODEC'
+
+
+alsacards = alsaaudio.cards()
+if (debug):
+    print("alsacards =", alsacards)
+
+secondcard = alsacards[1]
+
+card = secondcard #'CODEC'
 inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK, card)
 
 # Set attributes: Mono, 44100 Hz, 16 bit little endian samples
@@ -264,6 +272,12 @@ inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
 # or 0 bytes of data. The latter is possible because we are in nonblocking
 # mode.
 inp.setperiodsize(160)
+audiorecording = True
+now = time.gmtime()
+videoname = getFolderName(now,'h264')+getFileName(now,'h264')
+
+audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+audiofile = open(audiofilename, 'wb')
 #inp.pause()
 
 
@@ -326,8 +340,10 @@ with picamera.PiCamera() as camera:
                     
                     
                 
-                
+                couldbeaudio = False
                 if GPIO.event_detected(poweroffbutton):
+                    if audiobutton == poweroffbutton: 
+                        couldbeaudio = True
                     powerclickcount = powerclickcount + poweroffclickstep
                     if (debug):
                         print("powerclickcount =", powerclickcount)
@@ -346,7 +362,7 @@ with picamera.PiCamera() as camera:
                     camera.split_recording(stream)
                     videorecording = False
                             
-                    os.system("sudo shutdown -h now")
+                    os.system("sudo shutdown -F -h -t 30 now") #not sure about the -F which forces fsck on next boot
                     sys.exit()
     
                 # Have we run out whilst recording video
@@ -357,22 +373,24 @@ with picamera.PiCamera() as camera:
                     if (debug):
                         print ("limit breached audio stopping")
                 
-                if GPIO.event_detected(audiobutton) and not audiosizelimitreached and not videorecording:
+                
+                if GPIO.event_detected(audiobutton) or couldbeaudio:
                     # TODO :34 Audio
                     # this is the audio blog button
                     if (debug):
                         print('Audio Button Pressed!')
                         
                         if audiorecording:
-                            inp.pause()
-                            audiofile.close()
-                            audiorecording = False
+                            if (not videorecording) and (not audiosizelimitreached):
+                                inp.pause()
+                                audiofile.close()
+                                audiorecording = False
                             
                         else:
                             now = time.gmtime()
                             audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
                             audiofile = open(audiofilename, 'wb')
-                            inp.pause(0)
+                            #inp.pause(0)
                         
                             
                 # Have we run out whilst recording video
