@@ -326,8 +326,7 @@ with picamera.PiCamera() as camera:
                 if audiosizelimitreached and audiorecording:
                     # TODO : Stop recording
                     audiorecording = False
-                    AudioRecordingProcess.kill()
-                    AudioRecordingProcess.poll()
+                    subprocess.call("killall arecord", shell=True)
                                 
                     
                     if (debug):
@@ -343,8 +342,7 @@ with picamera.PiCamera() as camera:
                         if audiorecording:
                             if (not videorecording) or audiosizelimitreached:
                                 audiorecording = False
-                                AudioRecordingProcess.kill()
-                                AudioRecordingProcess.poll()
+                                subprocess.call("killall arecord", shell=True)
                                 
                                 if (debug):
                                     print ("ending recording")
@@ -382,8 +380,7 @@ with picamera.PiCamera() as camera:
                         camera.split_recording(stream)
                         videorecording = False
                         audiorecording = False
-                        AudioRecordingProcess.kill()
-                        AudioRecordingProcess.poll()
+                        subprocess.call("killall arecord", shell=True)
                                 
                         
                         if (debug):
