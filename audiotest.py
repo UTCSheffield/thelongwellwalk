@@ -22,8 +22,17 @@ import time
 import getopt
 import alsaaudio
 
+alsacards = alsaaudio.cards()
+print("alsacards =", alsacards)
 
-card = 'default'
+secondcard = alsacards[1]
+print("secondcard =", secondcard)
+
+if not secondcard:
+    print "No Mic Present"
+    
+card = secondcard 
+
 filename = "test1.wav"
 
 f = open(filename, 'wb')
