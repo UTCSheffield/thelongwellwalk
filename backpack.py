@@ -15,8 +15,6 @@ import getopt
 import subprocess
 
 #Config
-#tl_target = 60          # How long between each Timelapse shot
-tl_target = 20          # How long between each Timelapse shot
 buffer_length = 15      # How many seconds worth of video do we keep in the buffer
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
@@ -24,13 +22,16 @@ f_favail_limit = 20000  # How much disk space is too little space (measured in b
 arecordcmd = "arecord -D plughw:1,0 "
 # TODO : use the --max-file-time on the audio files
 
+
 duration_step = 1
-duration_timelapse = 60
+#duration_timelapse = 60
+duration_timelapse = 20
+duration_first_timelapse = 5
 
-next_step = 1
-next_timelapse = 60
+next_step = 0
+next_timelapse = 0
 
-cycle_wait = 0.10
+cycle_wait = 0.5
 
 poweroffclicktarget = 6
 poweroffclickstep = 2
@@ -125,7 +126,7 @@ def output_status():
     global videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     
     
-    if (tl_count % 20) == 0:
+    if (math.floor(current_time) % 20) == 0:  
         if (False and debug):
         
             print("videorecording blue?=", videorecording)
@@ -138,7 +139,7 @@ def output_status():
             print("sizewarningreached =", sizewarningreached)
             print("loadlimitbreached =", loadlimitbreached)
         
-    if (tl_count % 2):        
+    if math.floor(current_time) % 2:          
         if transferring:
             # Status -Flashing white = Transferring
             GPIO.output( statusLED_R, False)
@@ -167,14 +168,26 @@ def output_status():
         else:
             output_mode()
     else:
-            output_mode()
+        output_mode()
     
-        
+def splitDegrees(fDeg):
+    iDeg = math.floor(fDeg)
+    print("iDeg =", iDeg)
+    # TODO : Change to deg/1 min/1 sec/1 integer format
+    fMin = 60 * (fDeg - iDeg)
+    print("fMin =", fMin)
+    iMin = math.floor(fMin)
+    print("iMin =", iMin)
+    
+    fSecs = 60 * (fMin - iMin)
+    print("fSecs =", fSecs)
+    iSecs = math.floor(fSecs)
+    print("iSecs =", iSecs)
+    return [iDeg, iMin, iSecs]
+            
 # Take a timelapse shot    
 def dotimelapse():
     if not audiosizelimitreached:
-        
-        
         camera.exif_tags['EXIF.Copyright'] = 'Copyright (c) 2014 the Long Well Walk'
         
         if not (math.isnan(gpsc.fix.latitude) or math.isnan(gpsc.fix.longitude)) and gpsc.fix.latitude and gpsc.fix.longitude:
@@ -183,8 +196,7 @@ def dotimelapse():
                 print "longitude ", gpsc.fix.longitude
                 print "altitude (m)", gpsc.fix.altitude
             
-            
-            # TODO :  Test that the GPS data set in EXIF properl;y fits the spec and is readable
+            # DONE :  Test that the GPS data set in EXIF properly fits the spec and is readable
             # Spec here http://www.digicamsoft.com/exif22/exif22/html/exif22_53.htm
             
             camera.exif_tags['GPS.GPSVersionID'] = "2.2.0.0"
@@ -194,25 +206,21 @@ def dotimelapse():
             else:
                 camera.exif_tags['GPS.GPSLatitudeRef'] = "S"
             
-            #dd/1,mmmm/100,0/1
             lat = math.fabs(gpsc.fix.latitude)
-            deg = math.floor(lat)
-            # TODO : Change to deg/1 min/1 sec/1 integer format
-            degmin = math.floor(10000 * (lat - deg))
-            camera.exif_tags['GPS.GPSLatitude'] = '{},{},00'.format(deg, degmin)
+            iDeg, iMin, iSecs = splitDegrees(lat)
+            #dd/1,mm/1,ss/1
+            camera.exif_tags['GPS.GPSLatitude'] = '{},{},{}'.format(iDeg+0.1, iMin+0.1, iSecs+0.1)
             
-    
             if gpsc.fix.longitude >= 0:
                 camera.exif_tags['GPS.GPSLongitudeRef'] = "E"
             else:
                 camera.exif_tags['GPS.GPSLongitudeRef'] = "W"
             
-            #dd/1,mmmm/100,0/1
+            
             longitude = math.fabs(gpsc.fix.longitude)
-            deg = math.floor(longitude)
-            # TODO : Change to deg/1 min/1 sec/1 integer format
-            degmin = math.floor(10000 * (longitude - deg))
-            camera.exif_tags['GPS.GPSLongitude'] = '{},{},00'.format(deg, degmin)
+            iDeg, iMin, iSecs = splitDegrees(longitude)
+            #dd/1,mm/1,ss/1
+            camera.exif_tags['GPS.GPSLongitude'] = '{},{},{}'.format(iDeg+0.1, iMin+0.1, iSecs+0.1)
             
     
             if gpsc.fix.altitude >= 0:
@@ -222,18 +230,20 @@ def dotimelapse():
             
             camera.exif_tags['GPS.GPSAltitude'] ='{}'.format(math.fabs(gpsc.fix.altitude))
             
-            gpslogline = '{},{},{},{}'.format(time.time(), gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
+            gpslogline = '{},{},{},{}'.format(math.floor(time.time()), gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
             
             # TODO : Write the gpslogline to a GPS file.
             #file.write(gpslogline)
+            gpsnow = time.gmtime()
+            gpsname = getFolderName(stillnow,'gps')+getFileName(stillnow,'gps')
+            
+            with open(gpsname, "a") as gpsfile:
+                gpsfile.write(gpslogline)
             
             if (debug):
                 print("time.time =", time.time())
                 print("gpslogline =", gpslogline)
 
-
-        #GPSTimeStamp, GPSSatellites, GPSStatus, GPSMeasureMode, GPSDOP, GPSSpeedRef, GPSSpeed, GPSTrackRef, GPSTrack, GPSImgDirectionRef, GPSImgDirection, GPSMapDatum, GPSDestLatitudeRef, GPSDestLatitude, GPSDestLongitudeRef, GPSDestLongitude, GPSDestBearingRef, GPSDestBearing, GPSDestDistanceRef, GPSDestDistance, GPSProcessingMethod, GPSAreaInformation, GPSDateStamp, GPSDifferential
-        
         stillnow = time.gmtime()
         stillname = getFolderName(stillnow,'jpg')+getFileName(stillnow,'jpg')
         
@@ -317,12 +327,11 @@ with picamera.PiCamera() as camera:
     stream = picamera.PiCameraCircularIO(camera, seconds=buffer_length)
     camera.start_recording(stream, format='h264')    
     
-    duration_step = 1
-    duration_timelapse = 60
-    duration_first_timelapse = 5
     
     
-    current_time = time.clock()
+    
+    current_time = time.time()
+    print("current_time =", current_time)
     next_step = current_time + duration_step
     next_timelapse = current_time + duration_first_timelapse
 
@@ -339,11 +348,14 @@ with picamera.PiCamera() as camera:
     try:
         while True:
             camera.wait_recording(cycle_wait)    # Pause in loop
-            current_time =  time.clock()
+            current_time =  time.time()
+            #print("current_time =", current_time)
                         
             #visual stuff
             if(current_time >= next_step):
-                next_step = current_time + duration_step
+                #next_step = current_time + duration_step
+                next_step = next_step + duration_step
+                #print("next_step =", next_step)
                 
                 # check GPS time and if it ahead of RPi time update RPi time
                 if gpsc.utc and gpsc.utc<>"None":
@@ -358,130 +370,131 @@ with picamera.PiCamera() as camera:
                 
                     print gpsc.fix
             
-                if(current_time >= next_timelapse):                
-                    dotimelapse()
-                    next_timelapse = current_time + duration_timelapse
-                    # Have we run out of disk space
-                    checkstatus()
+            if(current_time >= next_timelapse):                
+                dotimelapse()
+                next_timelapse = next_timelapse + duration_timelapse
+                # Have we run out of disk space
+                checkstatus()
                 
-                couldbeaudio = False
-                if GPIO.event_detected(poweroffbutton):
-                    if audiobutton == poweroffbutton: 
-                        couldbeaudio = True
-                    powerclickcount = powerclickcount + poweroffclickstep
-                    if (debug):
-                        print("powerclickcount =", powerclickcount)
+            #Fast reacting stuff    
+            couldbeaudio = False
+            if GPIO.event_detected(poweroffbutton):
+                if audiobutton == poweroffbutton: 
+                    couldbeaudio = True
+                powerclickcount = powerclickcount + poweroffclickstep
+                if (debug):
+                    print("powerclickcount =", powerclickcount)
+            
+            elif powerclickcount > 0:
+                powerclickcount = powerclickcount - 1
+
+            if powerclickcount >= poweroffclicktarget:
+                if (debug):
+                    print ("Power off triggered stopping")
                 
-                elif powerclickcount > 0:
-                    powerclickcount = powerclickcount - 1
-    
-                if powerclickcount >= poweroffclicktarget:
-                    if (debug):
-                        print ("Power off triggered stopping")
-                    
-                    GPIO.output( statusLED_R, False) 
-                    GPIO.output( statusLED_G, True)
-                    GPIO.output( statusLED_B, True)
+                GPIO.output( statusLED_R, False) 
+                GPIO.output( statusLED_G, True)
+                GPIO.output( statusLED_B, True)
 
 
-                    camera.split_recording(stream)
-                    videorecording = False
-                            
-                    os.system("sudo shutdown -F -h -t 30 now") #not sure about the -F which forces fsck on next boot
-                    sys.exit()
-    
-                # Have we run out whilst recording video
-                if audiosizelimitreached and audiorecording:
-                    # TODO : Stop recording
-                    audiorecording = False
-                    subprocess.call("killall arecord", shell=True)
-                                
-                    
-                    if (debug):
-                        print ("limit breached audio stopping")
-                
-                
-                if GPIO.event_detected(audiobutton) or couldbeaudio:
-                    # TODO :34 Audio
-                    # this is the audio blog button
-                    if (debug):
-                        print('Audio Button Pressed!')
+                camera.split_recording(stream)
+                videorecording = False
                         
-                        if audiorecording:
-                            if (not videorecording) or audiosizelimitreached:
-                                audiorecording = False
-                                subprocess.call("killall arecord", shell=True)
-                                
-                                if (debug):
-                                    print ("ending recording")
+                os.system("sudo shutdown -h -t 30 now") #not sure about the -F which forces fsck on next boot
+                sys.exit()
+
+            # Have we run out whilst recording video
+            if audiosizelimitreached and audiorecording:
+                # TODO : Stop recording
+                audiorecording = False
+                subprocess.call("killall arecord", shell=True)
+                            
                 
-                        else:
-                            now = time.gmtime()
-                            audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
-                            AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
-                            audiorecording = True
+                if (debug):
+                    print ("limit breached audio stopping")
+            
+            
+            if GPIO.event_detected(audiobutton) or couldbeaudio:
+                # TODO :34 Audio
+                # this is the audio blog button
+                if (debug):
+                    print('Audio Button Pressed!')
+                    
+                    if audiorecording:
+                        if (not videorecording) or audiosizelimitreached:
+                            audiorecording = False
+                            subprocess.call("killall arecord", shell=True)
                             
                             if (debug):
-                                print ("recordinging into ", audiofilename)
-                        
-                            
-                            
-                # Have we run out whilst recording video
-                if videosizelimitreached and videorecording:
-                    camera.split_recording(stream)
-                    
-                    videorecording = False
-                    if (debug):
-                        print ("limit breached video stopping")
-                
-                
-                # Has the video button been pressed?
-                if GPIO.event_detected(videobutton) and not videosizelimitreached:
-                    if (debug):
-                        print('Video Button Clicked!')
-                    
-                    # If we are recording stop recording
-                    if videorecording:
-                        if (debug):
-                            print('Button pressed to stop ')
-                        # Go back to recording to the ring buffer not the file
-                        camera.split_recording(stream)
-                        videorecording = False
-                        audiorecording = False
-                        subprocess.call("killall arecord", shell=True)
-                                
-                        
-                        if (debug):
-                            print("button video ending "+videoname)
+                                print ("ending recording")
+            
                     else:
-                        videorecording = True
-                        output_mode()
-                        # What should the video be called
                         now = time.gmtime()
-                        videoname = getFolderName(now,'h264')+getFileName(now,'h264')
-
                         audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
-                        
-                        # TODO : Start recording audio
                         AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
-                        
+                        audiorecording = True
                         
                         if (debug):
-                            print("button video starting "+videoname)
-                        
-                        # Send video to the file
-                        camera.split_recording(videoname)
-                        
-                        # TODO : #34 Audio Recording
-                        # TODO : the video triggers the wide angle audio
-                        # TODO : workout if we can have an audio ring buffer
+                            print ("recordinging into ", audiofilename)
+                    
                         
                         
-                        # Save the ring buffer to the disk
-                        write_video(stream)
+            # Have we run out whilst recording video
+            if videosizelimitreached and videorecording:
+                camera.split_recording(stream)
                 
-                # Set the output lights
-                output_status()
+                videorecording = False
+                if (debug):
+                    print ("limit breached video stopping")
+            
+            
+            # Has the video button been pressed?
+            if GPIO.event_detected(videobutton) and not videosizelimitreached:
+                if (debug):
+                    print('Video Button Clicked!')
+                
+                # If we are recording stop recording
+                if videorecording:
+                    if (debug):
+                        print('Button pressed to stop ')
+                    # Go back to recording to the ring buffer not the file
+                    camera.split_recording(stream)
+                    videorecording = False
+                    audiorecording = False
+                    subprocess.call("killall arecord", shell=True)
+                            
+                    
+                    if (debug):
+                        print("button video ending "+videoname)
+                else:
+                    videorecording = True
+                    output_mode()
+                    # What should the video be called
+                    now = time.gmtime()
+                    videoname = getFolderName(now,'h264')+getFileName(now,'h264')
+
+                    audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+                    
+                    # TODO : Start recording audio
+                    AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
+                    
+                    
+                    if (debug):
+                        print("button video starting "+videoname)
+                    
+                    # Send video to the file
+                    camera.split_recording(videoname)
+                    
+                    # TODO : #34 Audio Recording
+                    # TODO : the video triggers the wide angle audio
+                    # TODO : workout if we can have an audio ring buffer
+                    
+                    
+                    # Save the ring buffer to the disk
+                    write_video(stream)
+            
+            # Set the output lights
+            output_status()
 
     finally:
         # Tidy up when the program stops
