@@ -54,10 +54,10 @@ videobutton = 11        # Video (currently rigged as momentary switch)
 audiobutton = 12        # Audio (no code so far)
 poweroffbutton = 12        # Poweroff button (can be same as audio)
 
-statusLED_R = 18          # Red LED, short wire on own
-statusLED_G = 16          # Green LED middle length wire
-statusLED_B = 15          # Blue LED short wire next to middle length
-#The GND wire is the longest and is wired through a switch so it only shows when pressed
+statusLED_R = 15 #10 # Red LED, short wire on own
+statusLED_G = 18 # 7 # Green LED middle length wire
+statusLED_B = 16 # 8 # Blue LED short wire next to middle length
+
 
 GPS_TXD     = 8
 GPS_RXD     = 10
@@ -341,11 +341,15 @@ with picamera.PiCamera() as camera:
     checkstatus()
     output_status()
     
-    GPIO.add_event_detect(videobutton, GPIO.BOTH)  # Start listening out for button presses
-    GPIO.add_event_detect(audiobutton, GPIO.BOTH)  # Start listening out for button presses
+    GPIO.add_event_detect(videobutton, GPIO.BOTH, bouncetime=300)  # Start listening out for button presses
+    GPIO.add_event_detect(audiobutton, GPIO.BOTH, bouncetime=300)  # Start listening out for button presses
     if not poweroffbutton == audiobutton: 
-        GPIO.add_event_detect(poweroffbutton, GPIO.BOTH)  # Start listening out for button presses
-       
+        GPIO.add_event_detect(poweroffbutton, GPIO.BOTH, bouncetime=300)  # Start listening out for button presses
+    
+    lastvideobuttonstate = GPIO.input(videobutton)
+    lastaudiobuttonstate = GPIO.input(audiobutton)
+    lastpoweroffbuttonstate = GPIO.input(poweroffbutton)
+    
     try:
         while True:
             camera.wait_recording(cycle_wait)    # Pause in loop
@@ -376,12 +380,24 @@ with picamera.PiCamera() as camera:
                 next_timelapse = next_timelapse + duration_timelapse
                 # Have we run out of disk space
                 checkstatus()
-                
-            #Fast reacting stuff    
-            couldbeaudio = False
+            
+            videobuttonpressednow = false
             if GPIO.event_detected(poweroffbutton):
-                if audiobutton == poweroffbutton: 
+                videobuttonpressednow = (GPIO.input(videobutton) <> lastvideobuttonstate)
+            
+            poweroffbuttonpressednow = false
+            if GPIO.event_detected(poweroffbutton):
+                poweroffbuttonpressednow = (GPIO.input(poweroffbutton) <> lastpoweroffbuttonstate)
+                if poweroffbuttonpressednow and audiobutton == poweroffbutton: 
                     couldbeaudio = True
+            
+            
+            if GPIO.event_detected(poweroffbutton):
+                audiobuttonpressednow = (GPIO.input(audiobutton) <> lastaudiobuttonstate)
+            
+            
+            #Fast reacting stuff    
+            if poweroffbuttonpressednow:
                 powerclickcount = powerclickcount + poweroffclickstep
                 if (debug):
                     print("powerclickcount =", powerclickcount)
@@ -415,7 +431,7 @@ with picamera.PiCamera() as camera:
                     print ("limit breached audio stopping")
             
             
-            if GPIO.event_detected(audiobutton) or couldbeaudio:
+            if audiobuttonpressednow or couldbeaudio:
                 # TODO :34 Audio
                 # this is the audio blog button
                 if (debug):
@@ -450,7 +466,7 @@ with picamera.PiCamera() as camera:
             
             
             # Has the video button been pressed?
-            if GPIO.event_detected(videobutton) and not videosizelimitreached:
+            if videobuttonpressednow and not videosizelimitreached:
                 if (debug):
                     print('Video Button Clicked!')
                 
