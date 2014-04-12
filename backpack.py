@@ -353,6 +353,29 @@ with picamera.PiCamera() as camera:
     try:
         while True:
             camera.wait_recording(cycle_wait)    # Pause in loop
+            
+            videobuttonpressednow = False
+            if GPIO.event_detected(videobutton):
+                videobuttonpressednow = (GPIO.input(videobutton) <> lastvideobuttonstate)
+                lastvideobuttonstate = GPIO.input(videobutton)
+            
+            poweroffbuttonpressednow = False
+            couldbeaudio = False
+            if GPIO.event_detected(poweroffbutton):
+                poweroffbuttonpressednow = (GPIO.input(poweroffbutton) <> lastpoweroffbuttonstate)
+                lastpoweroffbuttonstate = GPIO.input(poweroffbutton)
+                if poweroffbuttonpressednow and audiobutton == poweroffbutton: 
+                    couldbeaudio = True
+            
+            audiobuttonpressednow = False
+            if GPIO.event_detected(audiobutton):
+                print("audiobutton =", audiobutton)
+                audiobuttonpressednow = (GPIO.input(audiobutton) <> lastaudiobuttonstate)
+                lastaudiobuttonstate = GPIO.input(audiobutton)
+                print("audiobuttonpressednow =", audiobuttonpressednow)
+            
+        
+        
             current_time =  time.time()
             #print("current_time =", current_time)
                         
@@ -380,20 +403,6 @@ with picamera.PiCamera() as camera:
                 next_timelapse = next_timelapse + duration_timelapse
                 # Have we run out of disk space
                 checkstatus()
-            
-            videobuttonpressednow = false
-            if GPIO.event_detected(poweroffbutton):
-                videobuttonpressednow = (GPIO.input(videobutton) <> lastvideobuttonstate)
-            
-            poweroffbuttonpressednow = false
-            if GPIO.event_detected(poweroffbutton):
-                poweroffbuttonpressednow = (GPIO.input(poweroffbutton) <> lastpoweroffbuttonstate)
-                if poweroffbuttonpressednow and audiobutton == poweroffbutton: 
-                    couldbeaudio = True
-            
-            
-            if GPIO.event_detected(poweroffbutton):
-                audiobuttonpressednow = (GPIO.input(audiobutton) <> lastaudiobuttonstate)
             
             
             #Fast reacting stuff    
