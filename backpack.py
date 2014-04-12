@@ -13,6 +13,8 @@ from GPSController import *
 import math
 import getopt
 import subprocess
+import re
+                    
 
 #Config
 buffer_length = 15      # How many seconds worth of video do we keep in the buffer
@@ -70,17 +72,25 @@ audiosizelimitreached = False
 sizewarningreached = False
 transferring = False
 
+lastutc = ""
+
 
 # Functions
 
 # Work out the file name based on the current time and file type
 def getFileName(curtime, ext):
-    name = time.strftime("%Y-%m-%d-%H-%M-%S", curtime)+"."+ext
+    if ext == "gps":
+        name = time.strftime("%Y-%m-%d-%H", curtime)+"."+ext
+    else:    
+        name = time.strftime("%Y-%m-%d-%H-%M-%S", curtime)+"."+ext
     return name
 
 # Work out the file folder based on the current time and file type
 def getFolderName(curtime, ext):
-    name = outputbasedir+ext+'/'+time.strftime('%Y-%m/%d/%H/', curtime)
+    if ext == "gps":
+        name = outputbasedir+ext+'/'+time.strftime("%Y-%m/%d/", curtime)
+    else:    
+        name = outputbasedir+ext+'/'+time.strftime('%Y-%m/%d/%H/', curtime)
     # if the folder doesn't exist make it
     if not os.path.exists(name):
         os.makedirs(name)
@@ -91,24 +101,20 @@ def output_mode():
 
     # Mode lights
     # Status - Off = Not running
-    # Status -Red = Disk space too low, audio & video will not record
-
+    
     if audiosizelimitreached:
-        if (debug):
-            print("audiosizelimitreached Red =", audiosizelimitreached)
+        # Status -Red = Disk space too low, audio & video will not record
         GPIO.output( statusLED_R, False)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, True)
         
     elif videorecording:
-        #print("videorecording blue?=", videorecording)
         # Status -Blue = Video recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, False)
         
     elif audiorecording:
-        #print("audiorecording cyan?=", audiorecording)
         # Status -cyan = Audio recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
@@ -116,7 +122,6 @@ def output_mode():
         
     else:
         # Status -green = Timelapse mode
-        #print("timelapse should be green")
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
         GPIO.output( statusLED_B, True)
@@ -127,17 +132,21 @@ def output_status():
     
     
     if (math.floor(current_time) % 20) == 0:  
-        if (False and debug):
-        
-            print("videorecording blue?=", videorecording)
-            print("audiorecording cyan?=", audiorecording)
-        
-            print("Output status:-")
-            print("transferring =", transferring)
-            print("videosizelimitreached =", videosizelimitreached)
-            print("audiosizelimitreached =", audiosizelimitreached)
-            print("sizewarningreached =", sizewarningreached)
-            print("loadlimitbreached =", loadlimitbreached)
+        if (debug):
+            if videorecording:
+                print("videorecording blue?=", videorecording)
+            if audiorecording:
+                print("audiorecording cyan?=", audiorecording)
+            if transferring:
+                print("transferring =", transferring)
+            if videosizelimitreached:
+                print("videosizelimitreached =", videosizelimitreached)
+            if audiosizelimitreached:
+                print("audiosizelimitreached =", audiosizelimitreached)
+            if sizewarningreached:
+                print("sizewarningreached =", sizewarningreached)
+            if loadlimitbreached:
+                print("loadlimitbreached =", loadlimitbreached)
         
     if math.floor(current_time) % 2:          
         if transferring:
@@ -172,17 +181,10 @@ def output_status():
     
 def splitDegrees(fDeg):
     iDeg = math.floor(fDeg)
-    print("iDeg =", iDeg)
-    # TODO : Change to deg/1 min/1 sec/1 integer format
     fMin = 60 * (fDeg - iDeg)
-    print("fMin =", fMin)
     iMin = math.floor(fMin)
-    print("iMin =", iMin)
-    
     fSecs = 60 * (fMin - iMin)
-    print("fSecs =", fSecs)
     iSecs = math.floor(fSecs)
-    print("iSecs =", iSecs)
     return [iDeg, iMin, iSecs]
             
 # Take a timelapse shot    
@@ -230,18 +232,17 @@ def dotimelapse():
             
             camera.exif_tags['GPS.GPSAltitude'] ='{}'.format(math.fabs(gpsc.fix.altitude))
             
-            gpslogline = '{},{},{},{}'.format(math.floor(time.time()), gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
+            gpslogline = '{},{},{},{},{}\n'.format(math.floor(time.time()), gpsc.utc, gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
             
             # TODO : Write the gpslogline to a GPS file.
-            #file.write(gpslogline)
             gpsnow = time.gmtime()
-            gpsname = getFolderName(stillnow,'gps')+getFileName(stillnow,'gps')
+            gpsname = getFolderName(gpsnow,'gps')+getFileName(gpsnow,'gps')
+            print("gpsname =", gpsname)
             
             with open(gpsname, "a") as gpsfile:
                 gpsfile.write(gpslogline)
             
             if (debug):
-                print("time.time =", time.time())
                 print("gpslogline =", gpslogline)
 
         stillnow = time.gmtime()
@@ -358,18 +359,18 @@ with picamera.PiCamera() as camera:
                 #print("next_step =", next_step)
                 
                 # check GPS time and if it ahead of RPi time update RPi time
-                if gpsc.utc and gpsc.utc<>"None":
-                    print "time utc ", gpsc.utc #, " + ", gpsc.fix.time
-                    
-                    sattime = time.mktime(time.strptime(gpsc.utc, "%Y-%m-%dT%H:%M:%S.000Z"))
-                    print("sattime =", sattime)
-                    print("time.time =", time.time())
-                    if (time.time() < sattime):
-                        print "setting time"
-                        os.system('date -s %s' % gpsc.utc)
+                if not (math.isnan(gpsc.fix.latitude) or math.isnan(gpsc.fix.longitude)) and gpsc.fix.latitude and gpsc.fix.longitude and gpsc.utc and gpsc.utc<>"None":
+                    if gpsc.utc <> lastutc:
+                        lastutc = gpsc.utc
+                        timetoseconds = re.sub(r'\.[0-9][0-9][0-9]Z', r'Z', lastutc)
+                        sattime = time.mktime(time.strptime(timetoseconds, "%Y-%m-%dT%H:%M:%SZ"))
+                        if debug:
+                            print("sattime    =", sattime)
+                            print("time.time =", time.time())
+                        if (time.time() < sattime):
+                            print "setting time"
+                            os.system('date -s %s' % lastutc)
                 
-                    print gpsc.fix
-            
             if(current_time >= next_timelapse):                
                 dotimelapse()
                 next_timelapse = next_timelapse + duration_timelapse
