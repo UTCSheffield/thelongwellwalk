@@ -9,12 +9,31 @@ import os               # Operating system information and functions
 import io               # Input and Output (Files and streams))
 import RPi.GPIO as GPIO # Controls the GPIO for LEDs and Buttons
 import sys
+from GPSController import *
+import math
+import getopt
+import subprocess
+import re
+                    
 
 #Config
-tl_target = 60          # How long between each Timelapse shot
 buffer_length = 15      # How many seconds worth of video do we keep in the buffer
 debug = True            # Do we print out debugging messages
 f_favail_limit = 20000  # How much disk space is too little space (measured in blocks)
+
+arecordcmd = "arecord -D plughw:1,0 "
+# TODO : use the --max-file-time on the audio files
+
+
+duration_step = 1
+#duration_timelapse = 60
+duration_timelapse = 20
+duration_first_timelapse = 5
+
+next_step = 0
+next_timelapse = 0
+
+cycle_wait = 0.5
 
 poweroffclicktarget = 6
 poweroffclickstep = 2
@@ -36,10 +55,10 @@ videobutton = 11        # Video (currently rigged as momentary switch)
 audiobutton = 12        # Audio (no code so far)
 poweroffbutton = 12        # Poweroff button (can be same as audio)
 
-statusLED_R = 18          # Red LED, short wire on own
-statusLED_G = 16          # Green LED middle length wire
-statusLED_B = 15          # Blue LED short wire next to middle length
-#The GND wire is the longest and is wired through a switch so it only shows when pressed
+statusLED_R = 15 #10 # Red LED, short wire on own
+statusLED_G = 18 # 7 # Green LED middle length wire
+statusLED_B = 16 # 8 # Blue LED short wire next to middle length
+
 
 GPS_TXD     = 8
 GPS_RXD     = 10
@@ -55,17 +74,25 @@ sizewarningreached = False
 jpgsizelimitreached = False
 transferring = False
 
+lastutc = ""
+
 
 # Functions
 
 # Work out the file name based on the current time and file type
 def getFileName(curtime, ext):
-    name = time.strftime("%Y-%m-%d-%H-%M-%S", curtime)+"."+ext
+    if ext == "gps":
+        name = time.strftime("%Y-%m-%d-%H", curtime)+"."+ext
+    else:    
+        name = time.strftime("%Y-%m-%d-%H-%M-%S", curtime)+"."+ext
     return name
 
 # Work out the file folder based on the current time and file type
 def getFolderName(curtime, ext):
-    name = outputbasedir+ext+'/'+time.strftime('%Y-%m/%d/%H/', curtime)
+    if ext == "gps":
+        name = outputbasedir+ext+'/'+time.strftime("%Y-%m/%d/", curtime)
+    else:    
+        name = outputbasedir+ext+'/'+time.strftime('%Y-%m/%d/%H/', curtime)
     # if the folder doesn't exist make it
     if not os.path.exists(name):
         os.makedirs(name)
@@ -75,82 +102,75 @@ def output_mode():
     global jpgsizelimitreached, videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
 
     # Mode lights
-    # TODO : Status - Off = Not running
-    # TODO : Status -Red = Disk space too low, audio & video will not record
-
-    
     if jpgsizelimitreached:
         if (debug):
             print("jpgsizelimitreached Red =", audiosizelimitreached)
-    #if audiosizelimitreached:
-    #    if (debug):
-    #        print("audiosizelimitreached Red =", audiosizelimitreached)
         GPIO.output( statusLED_R, False)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, True)
         
     elif videorecording:
-        #print("videorecording blue?=", videorecording)
-        # TODO : Status -Blue = Video recording
+        # Status -Blue = Video recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, False)
         
     elif audiorecording:
-        #print("audiorecording cyan?=", audiorecording)
-        # TODO : Status -cyan = Audio recording
+        # Status -cyan = Audio recording
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
         GPIO.output( statusLED_B, False)
         
     else:
-        # DONE : Status -green = Timelapse mode
-        #print("timelapse should be green")
+        # Status -green = Timelapse mode
         GPIO.output( statusLED_R, True)
         GPIO.output( statusLED_G, False)
         GPIO.output( statusLED_B, True)
     
-# Change the output LEDs to show Liam what is going on
-# TODO : #31 LED Output Codes
+
 def output_status():
     global jpgsizelimitreached, videorecording, audiorecording, tl_count, loadlimitbreached, videosizelimitreached, audiosizelimitreached, sizewarningreached, transferring
     
     
-    if (tl_count % 20) == 0:
+    if (math.floor(current_time) % 20) == 0:  
         if (debug):
+            if videorecording:
+                print("videorecording blue?=", videorecording)
+            if audiorecording:
+                print("audiorecording cyan?=", audiorecording)
+            if transferring:
+                print("transferring =", transferring)
+            if videosizelimitreached:
+                print("videosizelimitreached =", videosizelimitreached)
+            if audiosizelimitreached:
+                print("audiosizelimitreached =", audiosizelimitreached)
+            if sizewarningreached:
+                print("sizewarningreached =", sizewarningreached)
+            if loadlimitbreached:
+                print("loadlimitbreached =", loadlimitbreached)
         
-            print("videorecording blue?=", videorecording)
-            print("audiorecording cyan?=", audiorecording)
-        
-            print("Output status:-")
-            print("transferring =", transferring)
-            print("videosizelimitreached =", videosizelimitreached)
-            print("audiosizelimitreached =", audiosizelimitreached)
-            print("sizewarningreached =", sizewarningreached)
-            print("loadlimitbreached =", loadlimitbreached)
-        
-    if (tl_count % 2):        
+    if math.floor(current_time) % 2:          
         if transferring:
-            # TODO : Status -Flashing white = Transferring
+            # Status -Flashing white = Transferring
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, False)
         
         elif videosizelimitreached:
-            # TODO : Status -Flashing Yellow = Disk space getting low
+            # Status -Flashing Yellow = Disk space getting low
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, True)
             GPIO.output( statusLED_B, True)
             
         elif sizewarningreached:
-            # TODO : Status -Flashing Red = Disk space too low, video will not record
+            # Status -Flashing Red = Disk space too low, video will not record
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, False)
             GPIO.output( statusLED_B, True)
             
         
         elif loadlimitbreached:
-            # TODO : Status -Flashing Magenta = CPU too stressed
+            # Status -Flashing Magenta = CPU too stressed
             GPIO.output( statusLED_R, False)
             GPIO.output( statusLED_G, True)
             GPIO.output( statusLED_B, False)
@@ -158,19 +178,83 @@ def output_status():
         else:
             output_mode()
     else:
-            output_mode()
+        output_mode()
     
-        
+def splitDegrees(fDeg):
+    iDeg = math.floor(fDeg)
+    fMin = 60 * (fDeg - iDeg)
+    iMin = math.floor(fMin)
+    fSecs = 60 * (fMin - iMin)
+    iSecs = math.floor(fSecs)
+    return [iDeg, iMin, iSecs]
+            
 # Take a timelapse shot    
 def dotimelapse():
     if not jpgsizelimitreached:
+        camera.exif_tags['EXIF.Copyright'] = 'Copyright (c) 2014 the Long Well Walk'
+        
+        if not (math.isnan(gpsc.fix.latitude) or math.isnan(gpsc.fix.longitude)) and gpsc.fix.latitude and gpsc.fix.longitude:
+            if (debug):
+                print "latitude ", gpsc.fix.latitude
+                print "longitude ", gpsc.fix.longitude
+                print "altitude (m)", gpsc.fix.altitude
+            
+            # DONE :  Test that the GPS data set in EXIF properly fits the spec and is readable
+            # Spec here http://www.digicamsoft.com/exif22/exif22/html/exif22_53.htm
+            
+            camera.exif_tags['GPS.GPSVersionID'] = "2.2.0.0"
+    
+            if gpsc.fix.latitude >= 0:
+                camera.exif_tags['GPS.GPSLatitudeRef'] = "N"
+            else:
+                camera.exif_tags['GPS.GPSLatitudeRef'] = "S"
+            
+            lat = math.fabs(gpsc.fix.latitude)
+            iDeg, iMin, iSecs = splitDegrees(lat)
+            #dd/1,mm/1,ss/1
+            camera.exif_tags['GPS.GPSLatitude'] = '{},{},{}'.format(iDeg+0.1, iMin+0.1, iSecs+0.1)
+            
+            if gpsc.fix.longitude >= 0:
+                camera.exif_tags['GPS.GPSLongitudeRef'] = "E"
+            else:
+                camera.exif_tags['GPS.GPSLongitudeRef'] = "W"
+            
+            
+            longitude = math.fabs(gpsc.fix.longitude)
+            iDeg, iMin, iSecs = splitDegrees(longitude)
+            #dd/1,mm/1,ss/1
+            camera.exif_tags['GPS.GPSLongitude'] = '{},{},{}'.format(iDeg+0.1, iMin+0.1, iSecs+0.1)
+            
+    
+            if gpsc.fix.altitude >= 0:
+                camera.exif_tags['GPS.GPSAltitudeRef'] = "0"
+            else:
+                camera.exif_tags['GPS.GPSAltitudeRef'] = "1"
+            
+            camera.exif_tags['GPS.GPSAltitude'] ='{}'.format(math.fabs(gpsc.fix.altitude))
+            
+            gpslogline = '{},{},{},{},{}\n'.format(math.floor(time.time()), gpsc.utc, gpsc.fix.latitude, gpsc.fix.longitude, gpsc.fix.altitude)
+            
+            # TODO : Write the gpslogline to a GPS file.
+            gpsnow = time.gmtime()
+            gpsname = getFolderName(gpsnow,'gps')+getFileName(gpsnow,'gps')
+            print("gpsname =", gpsname)
+            
+            with open(gpsname, "a") as gpsfile:
+                gpsfile.write(gpslogline)
+            
+            if (debug):
+                print("gpslogline =", gpslogline)
+
+
         stillnow = time.gmtime()
         stillname = getFolderName(stillnow,'jpg')+getFileName(stillnow,'jpg')
         
         camera.capture(stillname, use_video_port=True)
         if (debug):
             print("still "+stillname)
-      
+    
+    
 def write_video(stream):
     # Write the entire content of the circular buffer to disk. No need to
     # lock the stream here as we're definitely not writing to it
@@ -229,18 +313,17 @@ def checkstatus():
     loadlimitbreached = loadavg>loadavglimit
     
     if (debug):
-        print("Checkstatus:-")
-        print("stats.f_bfree =", stats.f_bfree)
-        print("videosizelimitreached =", videosizelimitreached)
-        print("audiosizelimitreached =", audiosizelimitreached)
-        
-        print("jpgsizelimitreached =", jpgsizelimitreached)
-        print("sizewarningreached =", sizewarningreached)
-        print("loadavg =", loadavg)
-        print("loadlimitbreached =", loadlimitbreached)
+        print("Checkstatus:-","stats.f_bfree =", stats.f_bfree,"jpgsizelimitreached",jpgsizelimitreached, "videosizelimitreached =", videosizelimitreached, "audiosizelimitreached =", audiosizelimitreached, "sizewarningreached =", sizewarningreached,"loadavg =", loadavg, "loadlimitbreached =", loadlimitbreached)
+
     
 
 #Main Code Starts here
+
+#create GPS controller
+gpsc = GpsController()
+
+#start controller
+gpsc.start()
 
 # GPIO setup
 GPIO.cleanup()
@@ -264,42 +347,87 @@ with picamera.PiCamera() as camera:
     #camera.resolution = (1280, 720)     #720P HD 1280x720
     camera.framerate = 25
     stream = picamera.PiCameraCircularIO(camera, seconds=buffer_length)
-    camera.start_recording(stream, format='h264')
+    camera.start_recording(stream, format='h264')    
     
     
-    GPIO.add_event_detect(videobutton, GPIO.BOTH)  # Start listening out for button presses
-    GPIO.add_event_detect(audiobutton, GPIO.BOTH)  # Start listening out for button presses
-    if not poweroffbutton == audiobutton: 
-        GPIO.add_event_detect(poweroffbutton, GPIO.BOTH)  # Start listening out for button presses
+    
+    
+    current_time = time.time()
+    print("current_time =", current_time)
+    next_step = current_time + duration_step
+    next_timelapse = current_time + duration_first_timelapse
+
     
     # Have we run out of disk space            
     checkstatus()
     output_status()
-                    
+    
+    GPIO.add_event_detect(videobutton, GPIO.BOTH, bouncetime=300)  # Start listening out for button presses
+    GPIO.add_event_detect(audiobutton, GPIO.BOTH, bouncetime=300)  # Start listening out for button presses
+    if not poweroffbutton == audiobutton: 
+        GPIO.add_event_detect(poweroffbutton, GPIO.BOTH, bouncetime=300)  # Start listening out for button presses
+    
+    lastvideobuttonstate = GPIO.input(videobutton)
+    lastaudiobuttonstate = GPIO.input(audiobutton)
+    lastpoweroffbuttonstate = GPIO.input(poweroffbutton)
     
     try:
         while True:
-            camera.wait_recording(1)    # Pause in loop
+            camera.wait_recording(cycle_wait)    # Pause in loop
             
-            # Is it time to take a timelapse shot
-            tl_count = tl_count + 1
-            if (tl_count >= tl_target):
-                tl_count = 0
+            videobuttonpressednow = False
+            if GPIO.event_detected(videobutton):
+                videobuttonpressednow = (GPIO.input(videobutton) <> lastvideobuttonstate)
+                lastvideobuttonstate = GPIO.input(videobutton)
+            
+            poweroffbuttonpressednow = False
+            couldbeaudio = False
+            if GPIO.event_detected(poweroffbutton):
+                poweroffbuttonpressednow = (GPIO.input(poweroffbutton) <> lastpoweroffbuttonstate)
+                lastpoweroffbuttonstate = GPIO.input(poweroffbutton)
+                if poweroffbuttonpressednow and audiobutton == poweroffbutton: 
+                    couldbeaudio = True
+            
+            audiobuttonpressednow = False
+            if GPIO.event_detected(audiobutton):
+                print("audiobutton =", audiobutton)
+                audiobuttonpressednow = (GPIO.input(audiobutton) <> lastaudiobuttonstate)
+                lastaudiobuttonstate = GPIO.input(audiobutton)
+                print("audiobuttonpressednow =", audiobuttonpressednow)
+            
+        
+        
+            current_time =  time.time()
+            #print("current_time =", current_time)
+                        
+            #visual stuff
+            if(current_time >= next_step):
+                #next_step = current_time + duration_step
+                next_step = next_step + duration_step
+                #print("next_step =", next_step)
+                
+                # check GPS time and if it ahead of RPi time update RPi time
+                if not (math.isnan(gpsc.fix.latitude) or math.isnan(gpsc.fix.longitude)) and gpsc.fix.latitude and gpsc.fix.longitude and gpsc.utc and gpsc.utc<>"None":
+                    if gpsc.utc <> lastutc:
+                        lastutc = gpsc.utc
+                        timetoseconds = re.sub(r'\.[0-9][0-9][0-9]Z', r'Z', lastutc)
+                        sattime = time.mktime(time.strptime(timetoseconds, "%Y-%m-%dT%H:%M:%SZ"))
+                        if debug:
+                            print("sattime    =", sattime)
+                            print("time.time =", time.time())
+                        if (time.time() < sattime):
+                            print "setting time"
+                            os.system('date -s %s' % lastutc)
+                
+            if(current_time >= next_timelapse):                
                 dotimelapse()
+                next_timelapse = next_timelapse + duration_timelapse
                 # Have we run out of disk space
                 checkstatus()
-                
-                
-                
-            # Have we run out whilst recording video
-            #if videosizelimitreached and videorecording:
-            #    camera.split_recording(stream)
-            #    videorecording = False
-            #    if (debug):
-            #        print ("limit breached video stopping")
             
             
-            if GPIO.event_detected(poweroffbutton):
+            #Fast reacting stuff    
+            if poweroffbuttonpressednow:
                 powerclickcount = powerclickcount + poweroffclickstep
                 if (debug):
                     print("powerclickcount =", powerclickcount)
@@ -314,35 +442,75 @@ with picamera.PiCamera() as camera:
                 GPIO.output( statusLED_R, False) 
                 GPIO.output( statusLED_G, True)
                 GPIO.output( statusLED_B, True)
-        
+
+
                 camera.split_recording(stream)
                 videorecording = False
                         
-                os.system("sudo shutdown -h now")
+                os.system("sudo shutdown -h -t 30 now") #not sure about the -F which forces fsck on next boot
                 sys.exit()
 
+            # Have we run out whilst recording video
+            if audiosizelimitreached and audiorecording:
+                # TODO : Stop recording
+                audiorecording = False
+                subprocess.call("killall arecord", shell=True)
+                            
+                
+                if (debug):
+                    print ("limit breached audio stopping")
             
-
+            
+            if audiobuttonpressednow or couldbeaudio:
+                # TODO :34 Audio
+                # this is the audio blog button
+                if (debug):
+                    print('Audio Button Pressed!')
+                    
+                    if audiorecording:
+                        if (not videorecording) or audiosizelimitreached:
+                            audiorecording = False
+                            subprocess.call("killall arecord", shell=True)
+                            
+                            if (debug):
+                                print ("ending recording")
+            
+                    else:
+                        now = time.gmtime()
+                        audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+                        AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
+                        audiorecording = True
+                        
+                        if (debug):
+                            print ("recordinging into ", audiofilename)
+                    
+                        
+                        
             # Have we run out whilst recording video
             if videosizelimitreached and videorecording:
                 camera.split_recording(stream)
+                
                 videorecording = False
                 if (debug):
                     print ("limit breached video stopping")
-                        
+            
             
             # Has the video button been pressed?
-            if GPIO.event_detected(videobutton) and not videosizelimitreached:
+            if videobuttonpressednow and not videosizelimitreached:
                 if (debug):
                     print('Video Button Clicked!')
                 
                 # If we are recording stop recording
-                if videorecording:                
+                if videorecording:
                     if (debug):
                         print('Button pressed to stop ')
                     # Go back to recording to the ring buffer not the file
                     camera.split_recording(stream)
                     videorecording = False
+                    audiorecording = False
+                    subprocess.call("killall arecord", shell=True)
+                            
+                    
                     if (debug):
                         print("button video ending "+videoname)
                 else:
@@ -351,11 +519,24 @@ with picamera.PiCamera() as camera:
                     # What should the video be called
                     now = time.gmtime()
                     videoname = getFolderName(now,'h264')+getFileName(now,'h264')
+
+                    audiofilename = getFolderName(now,'wav')+getFileName(now,'wav')
+                    
+                    # TODO : Start recording audio
+                    AudioRecordingProcess = subprocess.Popen(arecordcmd+audiofilename, shell=True)
+                    
+                    
                     if (debug):
                         print("button video starting "+videoname)
                     
                     # Send video to the file
                     camera.split_recording(videoname)
+                    
+                    # TODO : #34 Audio Recording
+                    # TODO : the video triggers the wide angle audio
+                    # TODO : workout if we can have an audio ring buffer
+                    
+                    
                     # Save the ring buffer to the disk
                     write_video(stream)
             
@@ -371,4 +552,7 @@ with picamera.PiCamera() as camera:
         GPIO.output( statusLED_G, True)
         GPIO.output( statusLED_B, True)
         GPIO.cleanup()
+        #stop GPS controller
+        gpsc.stopController()
+        gpsc.join()
 
