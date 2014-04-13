@@ -4,13 +4,13 @@ thelongwellwalk
 Raspberry Pi based system for recording and transmitting data from a lone long distance walker. Being built for http://thelongwellwalk.org/
 
 
-# Status -Red = Disk space too low, audio & video will not record or its shutting down because the poweroff command has been entered
-# Status -Blue = Video recording
-# Status -cyan = Audio recording
-# Status -green = Timelapse mode
-# Status -Flashing Yellow = Disk space getting low
-# Status -Flashing Red = Disk space too low, video will not record
-# Status -Flashing Magenta = CPU too stressed
+* Status -Red = Disk space too low, audio & video will not record or its shutting down because the poweroff command has been entered
+* Status -Blue = Video recording
+* Status -cyan = Audio recording
+* Status -green = Timelapse mode
+* Status -Flashing Yellow = Disk space getting low
+* Status -Flashing Red = Disk space too low, video will not record
+* Status -Flashing Magenta = CPU too stressed
 
 Turning on the power will start the scripts, and the light will turn on white ish for a few seconds then go Green (flashing Magenta because the start up process means the CPU is always running hard) it will settle to just green in a minute.
 
